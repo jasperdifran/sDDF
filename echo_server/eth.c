@@ -527,7 +527,7 @@ void notified(sel4cp_channel ch)
         case IRQ_CH:
             handle_eth(eth);
             have_signal = true;
-            msg = seL4_MessageInfo_new(IRQAckIRQ, 0, 0, 0);
+            signal_msg = seL4_MessageInfo_new(IRQAckIRQ, 0, 0, 0);
             signal = (BASE_IRQ_CAP + IRQ_CH);
             return;
         case INIT:

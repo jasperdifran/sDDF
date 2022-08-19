@@ -93,7 +93,7 @@ ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o
 BENCH_OBJS := benchmark/benchmark.o
 IDLE_OBJS := benchmark/idle.o
 
-all: $(IMAGE_FILE)
+all: directories $(IMAGE_FILE)
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -120,6 +120,14 @@ $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) eth.system
 
 %.o:
 	$(CC) $(CFLAGS) -c $(@:.o=.c) -o $@
+
+#Make the Directories
+directories:
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core)) 	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/netif))	\
+    $(info $(shell mkdir -p $(BUILD_DIR)/libsharedringbuffer))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/benchmark))	\
 
 clean:
 	rm -f *.o *.elf .depend*

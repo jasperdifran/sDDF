@@ -211,7 +211,7 @@ static err_t lwip_eth_send(struct netif *netif, struct pbuf *p)
 
     /* Notify the server for next time we recv() */
     have_signal = true;
-    msg = seL4_MessageInfo_new(0, 0, 0, 0);
+    signal_msg = seL4_MessageInfo_new(0, 0, 0, 0);
     signal = (BASE_OUTPUT_NOTIFICATION_CAP + TX_CH);
     /* NOTE: If driver is passive, we want to Call instead. */
 
