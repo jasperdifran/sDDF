@@ -32,12 +32,13 @@ SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 LWIPDIR=lwip/src
 BENCHDIR=benchmark
 RINGBUFFERDIR=libsharedringbuffer
+MICROPYDIR=micropython/ports/seL4-minimal
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
-IMAGES := eth.elf lwip.elf benchmark.elf idle.elf
+IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
-LDFLAGS := -L$(BOARD_DIR)/lib -Lbuild/lib
+LDFLAGS := -L$(BOARD_DIR)/lib -Llib
 LIBS := -lsel4cp -Tsel4cp.ld -lc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
@@ -49,7 +50,8 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(LWIPDIR)/include \
 	-I$(LWIPDIR)/include/ipv4 \
 	-I$(RINGBUFFERDIR)/include \
-	-I$(BENCHDIR)/include 
+	-I$(BENCHDIR)/include \
+	-I$(MICROPYDIR)/include \
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=$(LWIPDIR)/core/init.c \
@@ -101,6 +103,9 @@ $(BUILD_DIR)/%.o: %.c Makefile
 $(BUILD_DIR)/%.o: %.s Makefile
 	$(AS) -g3 -mcpu=$(CPU) $< -o $@
 
+$(BUILD_DIR)/websrv.elf: $(BUILD_DIR)/websrv.o $(MICROPYDIR)/build/websrv.o
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
+
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
@@ -126,6 +131,7 @@ directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src))	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core)) 	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/netif))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)) \
     $(info $(shell mkdir -p $(BUILD_DIR)/libsharedringbuffer))	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/benchmark))	\
 

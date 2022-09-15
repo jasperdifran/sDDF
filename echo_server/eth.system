@@ -85,6 +85,11 @@
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
     </protection_domain>
 
+    <protection_domain name="websrv" priority="103">
+        <program_image path="websrv.elf" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+    </protection_domain>
+
     <channel>
         <end pd="eth" id="2" />
         <end pd="lwip" id="2" />

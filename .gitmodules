@@ -1,0 +1,3 @@
+[submodule "echo_server/micropython"]
+	path = echo_server/micropython
+	url = git@github.com:jasperdifran/micropython.git
