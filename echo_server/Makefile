@@ -32,7 +32,7 @@ SEL4CP_TOOL ?= $(SEL4CP_SDK)/bin/sel4cp
 LWIPDIR=lwip/src
 BENCHDIR=benchmark
 RINGBUFFERDIR=libsharedringbuffer
-MICROPYDIR=micropython/ports/seL4-minimal
+MICROPYDIR=micropython/ports/imx8mm-sel4cp
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
