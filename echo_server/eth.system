@@ -101,6 +101,11 @@
     </channel>
 
     <channel>
+        <end pd="lwip" id="6" />
+        <end pd="websrv" id="6" />
+    </channel>
+
+    <channel>
         <end pd="lwip" id="3" />
         <end pd="bench" id="1" />
     </channel>
