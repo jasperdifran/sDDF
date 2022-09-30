@@ -10,3 +10,5 @@
 
 int setup_udp_socket(void);
 int setup_utilization_socket(void);
+
+int setup_tcp_socket(void);
