@@ -24,9 +24,6 @@
     <memory_region name="tx_websrv_avail" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_websrv_used" size="0x200_000" page_size="0x200_000"/>
 
-    <memory_region name="rx_websrv_cookies" size="0x200_000" page_size="0x200_000"/>
-    <memory_region name="tx_websrv_cookies" size="0x200_000" page_size="0x200_000"/>
-
     <memory_region name="data_packet" size="0x1000"/>
 
     <memory_region name="cyclecounters" size="0x1000"/>
@@ -116,7 +113,6 @@
 
         <map mr="shared_websrv_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_websrv_lwip_vaddr" />
 
-        <map mr="shared_dma" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
     </protection_domain>
 
     <channel>

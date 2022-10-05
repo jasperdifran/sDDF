@@ -99,6 +99,7 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o
 BENCH_OBJS := benchmark/benchmark.o
 IDLE_OBJS := benchmark/idle.o
+WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o
 
 all: directories $(IMAGE_FILE)
 
@@ -108,7 +109,7 @@ $(BUILD_DIR)/%.o: %.c Makefile
 $(BUILD_DIR)/%.o: %.s Makefile
 	$(AS) -g3 -mcpu=$(CPU) $< -o $@
 
-$(BUILD_DIR)/websrv.elf: $(BUILD_DIR)/websrv.o $(MICROPYDIR)/build/websrv.o
+$(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR)/build/websrv.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
 
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))

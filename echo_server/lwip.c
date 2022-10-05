@@ -40,7 +40,7 @@ uintptr_t copy_rx;
 uintptr_t shared_dma_vaddr;
 uintptr_t uart_base;
 
-uintptr_t shared_websrv_lwip;
+uintptr_t shared_websrv_lwip_vaddr;
 uintptr_t rx_websrv_avail;
 uintptr_t rx_websrv_used;
 uintptr_t tx_websrv_avail;
@@ -370,21 +370,21 @@ void init(void)
         enqueue_avail(&state.tx_ring, buffer->buffer, BUF_SIZE, buffer);
     }
 
-    /* Setup shared memory regions for websrv rings */
-    ring_init(&websrv_state.rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 1);
-    ring_init(&websrv_state.tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 1);
+    // /* Setup shared memory regions for websrv rings */
+    // ring_init(&websrv_state.rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 1);
+    // ring_init(&websrv_state.tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 1);
 
-    for (int i = 0; i < NUM_WEBSRV_BUFFERS - 1; i++) {
-        ethernet_buffer_t *buffer = &websrv_state.buffer_metadata[i];
-        *buffer = (ethernet_buffer_t) {
-            .buffer = shared_dma_vaddr + (BUF_SIZE * (i + NUM_BUFFERS * 2)),
-            .size = BUF_SIZE,
-            .origin = ORIGIN_RX_QUEUE,
-            .index = i,
-            .in_use = false,
-        };
-        enqueue_avail(&websrv_state.rx_ring, buffer->buffer, BUF_SIZE, buffer);
-    }
+    // for (int i = 0; i < NUM_WEBSRV_BUFFERS - 1; i++) {
+    //     ethernet_buffer_t *buffer = &websrv_state.buffer_metadata[i];
+    //     *buffer = (ethernet_buffer_t) {
+    //         .buffer = shared_dma_vaddr + (BUF_SIZE * (i + NUM_BUFFERS * 2)),
+    //         .size = BUF_SIZE,
+    //         .origin = ORIGIN_RX_QUEUE,
+    //         .index = i,
+    //         .in_use = false,
+    //     };
+    //     enqueue_avail(&websrv_state.rx_ring, buffer->buffer, BUF_SIZE, buffer);
+    // }
 
     lwip_init();
 

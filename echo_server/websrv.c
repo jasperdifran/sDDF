@@ -21,7 +21,7 @@ uintptr_t rx_websrv_used;
 uintptr_t tx_websrv_avail;
 uintptr_t tx_websrv_used;
 
-uintptr_t shared_websrv_lwip;
+uintptr_t shared_websrv_lwip_vaddr;
 
 typedef struct state {
     /* mac address for this client */

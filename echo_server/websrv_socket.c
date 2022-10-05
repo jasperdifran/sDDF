@@ -45,20 +45,20 @@ static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct
     // if (error) {
     //     sel4cp_dbg_puts("Failed to send TCP packet through socket");
     // }
+    return ERR_OK;
 }
 
 int websrv_socket_send_response() {
     sel4cp_dbg_puts("websrv_socket: Sending response\n");
+
+    // READ FROM WEBSRV TX ON LOOP
     err_t error = tcp_write(temp_websrv_socket, aadata_buf, strlen(aadata_buf), 1);
     if (error) {
         sel4cp_dbg_puts("Failed to queue TCP packet to socket");
     }
-    error = tcp_output(temp_websrv_socket);
-    if (error) {
-        sel4cp_dbg_puts("Failed to send TCP packet through socket");
-    }
+
+
     sel4cp_dbg_puts("Sent response\n");
-    tcp_close(temp_websrv_socket);
     temp_websrv_socket = NULL;
     return (int)error;
 }
@@ -72,12 +72,7 @@ static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t l
 
 static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
 {
-    sel4cp_dbg_puts("Utilization connection established!\n");
-    // err_t error = tcp_write(newpcb, WHOAMI, strlen(WHOAMI), TCP_WRITE_FLAG_COPY);
-    // sel4cp_dbg_puts("Sent WHOAMI message through utilization peer");
-    // if (error) {
-    //     sel4cp_dbg_puts("Failed to send WHOAMI message through utilization peer");
-    // }
+    sel4cp_dbg_puts("Websrv TCP connection established!\n");
     tcp_sent(newpcb, websrv_socket_sent_callback);
     tcp_recv(newpcb, websrv_socket_recv_callback);
     sel4cp_dbg_puts("Attached callbacks to socket\n");
