@@ -16,6 +16,15 @@
     <memory_region name="rx_cookies" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_cookies" size="0x200_000" page_size="0x200_000"/>
 
+    <!-- shared memory for ring buffer mechanism -->
+    <memory_region name="rx_websrv_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_websrv_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_websrv_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_websrv_used" size="0x200_000" page_size="0x200_000"/>
+
+    <memory_region name="rx_websrv_cookies" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_websrv_cookies" size="0x200_000" page_size="0x200_000"/>
+
     <memory_region name="data_packet" size="0x1000"/>
 
     <memory_region name="cyclecounters" size="0x1000"/>
@@ -65,6 +74,13 @@
 
         <map mr="data_packet" vaddr="0x5_011_000" perms="rw" cached="true" setvar_vaddr="data_packet" />
 
+
+        <!-- shared memory for websrv ring buffers -->
+        <map mr="rx_websrv_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_avail" />
+        <map mr="rx_websrv_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_used" />
+        <map mr="tx_websrv_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_avail" />
+        <map mr="tx_websrv_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_used" />
+
         <!-- shared memory used for benchmarking -->
         <map mr="cyclecounters" vaddr="0x5_010_000" perms="rw" cached="true" setvar_vaddr="cyclecounters_vaddr" />
 
@@ -88,6 +104,14 @@
     <protection_domain name="websrv" priority="103">
         <program_image path="websrv.elf" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <!-- shared memory for ring buffer mechanism -->
+        <map mr="rx_websrv_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_avail" />
+        <map mr="rx_websrv_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_used" />
+        <map mr="tx_websrv_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_avail" />
+        <map mr="tx_websrv_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_used" />
+
+        <map mr="shared_dma" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
     </protection_domain>
 
     <channel>
