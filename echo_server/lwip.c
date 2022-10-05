@@ -311,6 +311,7 @@ void init_post(void)
     }
 
     setup_udp_socket();
+    setup_tcp_socket();
     setup_utilization_socket();
 
     sel4cp_dbg_puts(sel4cp_name);
@@ -393,6 +394,10 @@ void notified(sel4cp_channel ch)
             /* Timer */
             irq(ch);
             sel4cp_irq_ack(ch);
+            return;
+        case WEBSRV_CH:
+            sel4cp_dbg_puts("lwip: received notification from WEBSRV\n");
+            websrv_socket_send_response();
             return;
         default:
             sel4cp_dbg_puts("lwip: received notification on unexpected channel\n");
