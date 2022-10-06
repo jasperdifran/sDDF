@@ -20,6 +20,7 @@
 #include "shared_ringbuffer.h"
 #include "echo.h"
 #include "timer.h"
+#include "websrv_socket.h"
 
 #define IRQ    1
 #define TX_CH  2
@@ -78,14 +79,6 @@ typedef struct state {
     ethernet_buffer_t buffer_metadata[NUM_BUFFERS * 2];
 } state_t;
 
-typedef struct websrv_state {
-    /* Pointers to shared buffers */
-    ring_handle_t rx_ring;
-    ring_handle_t tx_ring;
-    /*
-     * Metadata associated with buffers
-     */
-} websrv_state_t;
 
 websrv_state_t websrv_state;
 state_t state;
@@ -343,8 +336,6 @@ void init(void)
     ring_init(&state.rx_ring, (ring_buffer_t *)rx_avail, (ring_buffer_t *)rx_used, NULL, 1);
     ring_init(&state.tx_ring, (ring_buffer_t *)tx_avail, (ring_buffer_t *)tx_used, NULL, 1);
 
-
-
     for (int i = 0; i < NUM_BUFFERS - 1; i++) {
         ethernet_buffer_t *buffer = &state.buffer_metadata[i];
         *buffer = (ethernet_buffer_t) {
@@ -370,21 +361,17 @@ void init(void)
         enqueue_avail(&state.tx_ring, buffer->buffer, BUF_SIZE, buffer);
     }
 
-    // /* Setup shared memory regions for websrv rings */
-    // ring_init(&websrv_state.rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 1);
-    // ring_init(&websrv_state.tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 1);
+    /* Setup shared memory regions for websrv rings */
+    ring_init(&websrv_state.rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 1);
+    ring_init(&websrv_state.tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 1);
 
-    // for (int i = 0; i < NUM_WEBSRV_BUFFERS - 1; i++) {
-    //     ethernet_buffer_t *buffer = &websrv_state.buffer_metadata[i];
-    //     *buffer = (ethernet_buffer_t) {
-    //         .buffer = shared_dma_vaddr + (BUF_SIZE * (i + NUM_BUFFERS * 2)),
-    //         .size = BUF_SIZE,
-    //         .origin = ORIGIN_RX_QUEUE,
-    //         .index = i,
-    //         .in_use = false,
-    //     };
-    //     enqueue_avail(&websrv_state.rx_ring, buffer->buffer, BUF_SIZE, buffer);
-    // }
+    for (int i = 0; i < NUM_BUFFERS - 1; i++) {        
+        enqueue_avail(&websrv_state.rx_ring, shared_websrv_lwip_vaddr + (BUF_SIZE * i), BUF_SIZE, NULL);
+    }
+
+    for (int i = 0; i < NUM_BUFFERS - 1; i++) {        
+        enqueue_avail(&websrv_state.tx_ring, shared_websrv_lwip_vaddr + (BUF_SIZE * (i + NUM_BUFFERS)), BUF_SIZE, NULL);
+    }
 
     lwip_init();
 
@@ -429,7 +416,6 @@ void notified(sel4cp_channel ch)
             sel4cp_irq_ack(ch);
             return;
         case WEBSRV_CH:
-            sel4cp_dbg_puts("lwip: received notification from WEBSRV\n");
             websrv_socket_send_response();
             return;
         default:

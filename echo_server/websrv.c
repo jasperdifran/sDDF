@@ -1,6 +1,7 @@
 #include <sel4cp.h>
 #include <sel4/sel4.h>
 #include <websrvint.h>
+#include <string.h>
 
 #include "shared_ringbuffer.h"
 #include "echo.h"
@@ -23,36 +24,46 @@ uintptr_t tx_websrv_used;
 
 uintptr_t shared_websrv_lwip_vaddr;
 
-typedef struct state {
-    /* mac address for this client */
-    uint8_t mac[6];
-
-    /* Pointers to shared buffers */
-    ring_handle_t rx_ring;
-    ring_handle_t tx_ring;
-} state_t;
-
-state_t state;
-
+ring_handle_t rx_ring;
+ring_handle_t tx_ring;
 
 void init(void)
 {
-    ring_init(&state.rx_ring, (ring_buffer_t*)rx_websrv_avail, (ring_buffer_t*)rx_websrv_used, NULL, 1);
-    ring_init(&state.tx_ring, (ring_buffer_t*)tx_websrv_avail, (ring_buffer_t*)tx_websrv_used, NULL, 1);
-    sel4cp_dbg_puts("Init websrv pd\n");    
+    ring_init(&rx_ring, (ring_buffer_t*)rx_websrv_avail, (ring_buffer_t*)rx_websrv_used, NULL, 0);
+    ring_init(&tx_ring, (ring_buffer_t*)tx_websrv_avail, (ring_buffer_t*)tx_websrv_used, NULL, 0);
+    sel4cp_dbg_puts("Init websrv pd\n");
 }
-
-// char req_in[50] = "Some packing going in";
-char buffawuffa[1024] = "GET / HTTP/1.1\r\nHost: www.tutorialspoint.com\r\nAccept-Language: en-us\r\n\r\n";
 
 void notified(sel4cp_channel ch)
 {
-    sel4cp_dbg_puts("Notif\n");
     switch (ch)
     {
-    case LWIP_CH:
+    case LWIP_CH:;
         /* code */
-        run_webserver((char *)buffawuffa);
+        uintptr_t rx_buf;
+        uintptr_t tx_buf;
+        unsigned int rx_len;
+        unsigned int tx_len;
+        void *rx_cookie;
+        void *tx_cookie;
+
+        int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
+        if (error) {
+            sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
+            return;
+        }
+
+        error = dequeue_avail(&tx_ring, &tx_buf, &tx_len, &tx_cookie);
+        if (error) {
+            sel4cp_dbg_puts("Failed to dequeue avail from tx_ring\n");
+            return;
+        }
+
+        run_webserver((char *)rx_buf, (char *)tx_buf);
+        
+        enqueue_used(&tx_ring, tx_buf, strlen((char *)tx_buf), rx_cookie);
+        enqueue_avail(&rx_ring, rx_buf, BUF_SIZE, NULL);
+        
         sel4cp_notify(LWIP_CH);
         break;
     default:
