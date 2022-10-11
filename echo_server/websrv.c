@@ -7,6 +7,11 @@
 #include "echo.h"
 
 #include "util.h"
+// #include <util.h>
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define ABS(a) ((a) < 0 ? -(a) : (a))
 
 #define LWIP_CH 6
 
@@ -26,6 +31,8 @@ uintptr_t shared_websrv_lwip_vaddr;
 
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
+char tx_data[BUF_SIZE * 10] = {0};
+unsigned int tx_len;
 
 void init(void)
 {
@@ -34,34 +41,58 @@ void init(void)
     sel4cp_dbg_puts("Init websrv pd\n");
 }
 
-void notified(sel4cp_channel ch)
+void copy_mpybuf_to_ringbuf(void *cookie)
 {
-    switch (ch)
-    {
-    case LWIP_CH:;
-        /* code */
-        uintptr_t rx_buf;
-        uintptr_t tx_buf;
-        unsigned int rx_len;
-        unsigned int tx_len;
-        void *rx_cookie;
+    /* Split response buf up into ring buf buffers */
+    unsigned int bytes_written = 0;
+
+    while (bytes_written < tx_len) {
         void *tx_cookie;
-
-        int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
-        if (error) {
-            sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
-            return;
-        }
-
-        error = dequeue_avail(&tx_ring, &tx_buf, &tx_len, &tx_cookie);
+        uintptr_t tx_buf;
+        unsigned int temp_len;
+        
+        int error = dequeue_avail(&tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error) {
             sel4cp_dbg_puts("Failed to dequeue avail from tx_ring\n");
             return;
         }
 
-        run_webserver((char *)rx_buf, (char *)tx_buf);
+        unsigned int bytes_to_write = MIN(tx_len - bytes_written, BUF_SIZE);
+        for (unsigned int i = 0; i < bytes_to_write; i++) {
+            ((char *)tx_buf)[i] = tx_data[bytes_written + i];
+        }
+        bytes_written += bytes_to_write;
         
-        enqueue_used(&tx_ring, tx_buf, strlen((char *)tx_buf), rx_cookie);
+        enqueue_used(&tx_ring, tx_buf, strlen((char *)tx_buf), cookie);
+    }
+}
+
+void notified(sel4cp_channel ch)
+{
+    sel4cp_dbg_puts("Websrv notified\n");
+    switch (ch)
+    {
+    case LWIP_CH:;
+        /* Get request packet from lwip */
+        uintptr_t rx_buf;
+        void *rx_cookie;
+        unsigned int rx_len;
+
+        int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
+        if (error) {
+            sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
+            return;
+        } else {
+            sel4cp_dbg_puts("Dequeued used from rx_ring\n");
+        }
+
+        /* Init a response buf and process request */
+        run_webserver((char *)rx_buf, tx_data, &tx_len);
+
+        /* Copy response buf to ring buf */
+        copy_mpybuf_to_ringbuf(rx_cookie);
+
+        /* Release req buf */
         enqueue_avail(&rx_ring, rx_buf, BUF_SIZE, NULL);
         
         sel4cp_notify(LWIP_CH);

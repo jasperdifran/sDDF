@@ -70,18 +70,20 @@ int websrv_socket_send_response() {
     uintptr_t tx_buf;
     unsigned int len;
     void *cookie;
-    
-    err_t error = (err_t)dequeue_used(&websrv_state.tx_ring, &tx_buf, &len, &cookie);
-    if (error) {
-        sel4cp_dbg_puts("Failed to dequeue used from tx_ring\n");
-        return -1;
-    }
+    err_t error;
+    while (!ring_empty(websrv_state.tx_ring.used_ring)) {
+        error = (err_t)dequeue_used(&websrv_state.tx_ring, &tx_buf, &len, &cookie);
+        if (error) {
+            sel4cp_dbg_puts("Failed to dequeue used from tx_ring\n");
+            return -1;
+        }
 
-    error = tcp_write((struct tcp_pcb *)cookie, (char *)tx_buf, len, 1);
-    if (error) {
-        sel4cp_dbg_puts("Failed to queue TCP packet to socket");
+        error = tcp_write((struct tcp_pcb *)cookie, (char *)tx_buf, len, 1);
+        if (error) {
+            sel4cp_dbg_puts("Failed to queue TCP packet to socket");
+        }
+        enqueue_avail(&websrv_state.tx_ring, tx_buf, BUF_SIZE, NULL);
     }
-    enqueue_avail(&websrv_state.tx_ring, tx_buf, BUF_SIZE, NULL);
 
     return (int)error;
 }
