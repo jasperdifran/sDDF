@@ -15,7 +15,6 @@
 
 #define LWIP_CH 6
 
-#define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
@@ -31,7 +30,7 @@ uintptr_t shared_websrv_lwip_vaddr;
 
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
-char tx_data[BUF_SIZE * 10] = {0};
+char tx_data[BUF_SIZE * 128] = {0};
 unsigned int tx_len;
 
 void init(void)
@@ -87,6 +86,7 @@ void notified(sel4cp_channel ch)
         }
 
         /* Init a response buf and process request */
+        tx_len = 0;
         run_webserver((char *)rx_buf, tx_data, &tx_len);
 
         /* Copy response buf to ring buf */
