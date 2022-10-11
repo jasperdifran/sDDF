@@ -87,8 +87,8 @@ void notified(sel4cp_channel ch)
 
         /* Init a response buf and process request */
         tx_len = 0;
-        run_webserver((char *)rx_buf, tx_data, &tx_len);
-
+        run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
+        sel4cp_dbg_puts("Processed request\n");
         /* Copy response buf to ring buf */
         copy_mpybuf_to_ringbuf(rx_cookie);
 
