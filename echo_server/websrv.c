@@ -9,7 +9,7 @@
 #include "util.h"
 // #include <util.h>
 
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MIN(a, b) (a < b) ? a : b
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define ABS(a) ((a) < 0 ? -(a) : (a))
 
@@ -40,6 +40,36 @@ void init(void)
     sel4cp_dbg_puts("Init websrv pd\n");
 }
 
+
+void printnum(int num)
+{
+    char buf[10];
+    int i = 0;
+    if (num == 0) {
+        sel4cp_dbg_putc('0');
+        return;
+    }
+    while (num > 0) {
+        buf[i] = num % 10 + '0';
+        num /= 10;
+        i++;
+    }
+    //reverse buf
+    for (int j = 0; j < i / 2; j++) {
+        char tmp = buf[j];
+        buf[j] = buf[i - j - 1];
+        buf[i - j - 1] = tmp;
+    }
+    buf[i] = '\0';
+    sel4cp_dbg_puts(buf);
+}
+void label_num(char *s, int n)
+{
+    sel4cp_dbg_puts(s);
+    printnum(n);
+    sel4cp_dbg_puts("\n");
+}
+
 void copy_mpybuf_to_ringbuf(void *cookie)
 {
     /* Split response buf up into ring buf buffers */
@@ -54,21 +84,20 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         if (error) {
             sel4cp_dbg_puts("Failed to dequeue avail from tx_ring\n");
             return;
-        }
+        } 
 
-        unsigned int bytes_to_write = MIN(tx_len - bytes_written, BUF_SIZE);
+        unsigned int bytes_to_write = MIN((tx_len - bytes_written), BUF_SIZE);
         for (unsigned int i = 0; i < bytes_to_write; i++) {
             ((char *)tx_buf)[i] = tx_data[bytes_written + i];
         }
         bytes_written += bytes_to_write;
         
-        enqueue_used(&tx_ring, tx_buf, strlen((char *)tx_buf), cookie);
+        enqueue_used(&tx_ring, tx_buf, bytes_to_write, cookie);
     }
 }
 
 void notified(sel4cp_channel ch)
 {
-    sel4cp_dbg_puts("Websrv notified\n");
     switch (ch)
     {
     case LWIP_CH:;
@@ -81,14 +110,12 @@ void notified(sel4cp_channel ch)
         if (error) {
             sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
             return;
-        } else {
-            sel4cp_dbg_puts("Dequeued used from rx_ring\n");
         }
-
+ 
         /* Init a response buf and process request */
         tx_len = 0;
         run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
-        sel4cp_dbg_puts("Processed request\n");
+
         /* Copy response buf to ring buf */
         copy_mpybuf_to_ringbuf(rx_cookie);
 

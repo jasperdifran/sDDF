@@ -65,8 +65,64 @@ static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct
     return ERR_OK;
 }
 
-int websrv_socket_send_response() {
+void printnum(int num)
+{
+    char buf[10];
+    int i = 0;
+    if (num == 0) {
+        sel4cp_dbg_putc('0');
+        return;
+    }
+    while (num > 0) {
+        buf[i] = num % 10 + '0';
+        num /= 10;
+        i++;
+    }
+    //reverse buf
+    for (int j = 0; j < i / 2; j++) {
+        char tmp = buf[j];
+        buf[j] = buf[i - j - 1];
+        buf[i - j - 1] = tmp;
+    }
+    buf[i] = '\0';
+    sel4cp_dbg_puts(buf);
+}
+void label_num(char *s, int n)
+{
+    sel4cp_dbg_puts(s);
+    printnum(n);
+    sel4cp_dbg_puts("\n");
+}
 
+uintptr_t oom_buf;
+unsigned int oom_len;
+struct tcp_pcb *oom_pcb;
+
+/**
+ * @brief 
+ * 
+ * @param arg 
+ * @param tpcb 
+ * @param err 
+ * @return err_t 
+ */
+err_t websrv_oom_retry_write()
+{
+    int ret = tcp_write(oom_pcb, (char *)oom_buf, oom_len, 1);
+    if (ret != ERR_OK) return ERR_OK;
+
+    enqueue_avail(&websrv_state.tx_ring, oom_buf, BUF_SIZE, NULL);
+    oom_buf = 0;
+    oom_len = 0;
+    oom_pcb = NULL;
+    
+    websrv_socket_send_response();
+
+    return ERR_OK;
+}
+
+int websrv_socket_send_response() 
+{
     uintptr_t tx_buf;
     unsigned int len;
     void *cookie;
@@ -79,8 +135,20 @@ int websrv_socket_send_response() {
         }
 
         error = tcp_write((struct tcp_pcb *)cookie, (char *)tx_buf, len, 1);
-        if (error) {
-            sel4cp_dbg_puts("Failed to queue TCP packet to socket");
+        // Note this is going to happen as soon as files are over about 10k
+        if (error == ERR_MEM) {
+            oom_buf = tx_buf;
+            oom_len = len;
+            oom_pcb = (struct tcp_pcb *)cookie;
+            return -1;
+        }
+
+        /* Push output to socket when appropriate (might not have any more output) */
+        if (len < 2048) {
+            error = tcp_output((struct tcp_pcb *)cookie);
+            if (error) {
+                sel4cp_dbg_puts("Failed to push TCP packet to socket\n");
+            } 
         }
         enqueue_avail(&websrv_state.tx_ring, tx_buf, BUF_SIZE, NULL);
     }
@@ -90,6 +158,7 @@ int websrv_socket_send_response() {
 
 static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
+    websrv_oom_retry_write();
     return ERR_OK;
 }
 
@@ -113,7 +182,7 @@ int setup_tcp_socket(void)
         sel4cp_dbg_puts("Failed to bind the TCP socket");
         return -1;
     } else {
-        sel4cp_dbg_puts("Utilisation port bound to port 1236");
+        sel4cp_dbg_puts("Utilisation port bound to port 80");
     }
 
     tcp_socket = tcp_listen_with_backlog_and_err(tcp_socket, 1, &error);
