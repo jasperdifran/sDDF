@@ -80,6 +80,8 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         uintptr_t tx_buf;
         unsigned int temp_len;
         
+        if (ring_empty(tx_ring.avail_ring)) sel4cp_notify(LWIP_CH);
+        // while (ring_empty(&tx_ring));
         int error = dequeue_avail(&tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error) {
             sel4cp_dbg_puts("Failed to dequeue avail from tx_ring\n");
