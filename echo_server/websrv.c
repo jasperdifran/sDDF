@@ -37,6 +37,7 @@ void init(void)
 {
     ring_init(&rx_ring, (ring_buffer_t*)rx_websrv_avail, (ring_buffer_t*)rx_websrv_used, NULL, 0);
     ring_init(&tx_ring, (ring_buffer_t*)tx_websrv_avail, (ring_buffer_t*)tx_websrv_used, NULL, 0);
+    init_websrv();
     sel4cp_dbg_puts("Init websrv pd\n");
 }
 

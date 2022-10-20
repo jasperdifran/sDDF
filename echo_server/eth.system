@@ -2,6 +2,7 @@
 <system>
     <memory_region name="uart" size="0x10_000" phys_addr="0x30890000" />
     <memory_region name="eth0" size="0x10_000" phys_addr="0x30be0000" />
+    <memory_region name="snvs" size="0x10_000" phys_addr="0x30370000" />
 
     <memory_region name="timer" size="0x10_000" phys_addr="0x302d0000" />
     <memory_region name="hw_ring_buffer" size="0x1_000" />
@@ -104,6 +105,7 @@
     <protection_domain name="websrv" priority="103">
         <program_image path="websrv.elf" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+        <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
 
         <!-- shared memory for ring buffer mechanism -->
         <map mr="rx_websrv_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_avail" />
