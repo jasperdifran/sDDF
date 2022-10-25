@@ -41,6 +41,7 @@ extern websrv_state_t websrv_state;
 static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 {
     if (p == NULL) {
+        sel4cp_dbg_puts("p == NULL, closing socket\n");
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -48,6 +49,7 @@ static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct
     uintptr_t data;
     unsigned int len;
     void *cookie;
+
 
     int error = dequeue_avail(&websrv_state.rx_ring, &data, &len, &cookie);
     if (error) {
@@ -97,24 +99,24 @@ void label_num(char *s, int n)
 uintptr_t oom_buf;
 unsigned int oom_len;
 struct tcp_pcb *oom_pcb;
+int failed_write = 0;
 
-/**
- * @brief 
- * 
- * @param arg 
- * @param tpcb 
- * @param err 
- * @return err_t 
- */
 err_t websrv_oom_retry_write()
 {
+    // sel4cp_dbg_puts("websrv_oom_retry_write... ");
     int ret = tcp_write(oom_pcb, (char *)oom_buf, oom_len, 1);
-    if (ret != ERR_OK) return ERR_OK;
+    if (ret != ERR_OK) {
+        // sel4cp_dbg_puts("Failed\n");
+        tcp_output(oom_pcb);
+        return ERR_OK;
+    }
+    // sel4cp_dbg_puts("Success!\n");
 
     enqueue_avail(&websrv_state.tx_ring, oom_buf, BUF_SIZE, NULL);
     oom_buf = 0;
     oom_len = 0;
     oom_pcb = NULL;
+    failed_write = 0;
     
     websrv_socket_send_response();
 
@@ -123,11 +125,16 @@ err_t websrv_oom_retry_write()
 
 int websrv_socket_send_response() 
 {
-    uintptr_t tx_buf;
-    unsigned int len;
-    void *cookie;
+    if (failed_write) {
+        websrv_oom_retry_write();
+        return -1;
+    }
     err_t error;
     while (!ring_empty(websrv_state.tx_ring.used_ring)) {
+        // sel4cp_dbg_puts("Attempting to send response\n");
+        uintptr_t tx_buf;
+        unsigned int len;
+        void *cookie;
         error = (err_t)dequeue_used(&websrv_state.tx_ring, &tx_buf, &len, &cookie);
         if (error) {
             sel4cp_dbg_puts("Failed to dequeue used from tx_ring\n");
@@ -137,19 +144,15 @@ int websrv_socket_send_response()
         error = tcp_write((struct tcp_pcb *)cookie, (char *)tx_buf, len, 1);
         // Note this is going to happen as soon as files are over about 10k
         if (error == ERR_MEM) {
+            // sel4cp_dbg_puts("Out of memory\n");
             oom_buf = tx_buf;
             oom_len = len;
             oom_pcb = (struct tcp_pcb *)cookie;
+            failed_write = 1;
+            tcp_output((struct tcp_pcb *)cookie);
             return -1;
         }
-
-        /* Push output to socket when appropriate (might not have any more output) */
-        if (len < 2048) {
-            error = tcp_output((struct tcp_pcb *)cookie);
-            if (error) {
-                sel4cp_dbg_puts("Failed to push TCP packet to socket\n");
-            } 
-        }
+        tcp_output((struct tcp_pcb *)cookie);
         enqueue_avail(&websrv_state.tx_ring, tx_buf, BUF_SIZE, NULL);
     }
 
@@ -158,7 +161,13 @@ int websrv_socket_send_response()
 
 static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
-    websrv_oom_retry_write();
+    // sel4cp_dbg_puts("websrv_socket_sent_callback\n");
+    // label_num("Tx used ring empty: ", ring_empty(websrv_state.tx_ring.used_ring));
+    // label_num("Tx used ring empty: ", ring_empty(websrv_state.tx_ring.avail_ring));
+    if (failed_write) {
+        // sel4cp_dbg_puts("Failed write, retrying\n");
+        websrv_oom_retry_write();
+    }
     return ERR_OK;
 }
 

@@ -30,7 +30,7 @@ uintptr_t shared_websrv_lwip_vaddr;
 
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
-char tx_data[BUF_SIZE * 128] = {0};
+char tx_data[BUF_SIZE * 256] = {0};
 unsigned int tx_len;
 
 void init(void)
@@ -40,7 +40,6 @@ void init(void)
     init_websrv();
     sel4cp_dbg_puts("Init websrv pd\n");
 }
-
 
 void printnum(int num)
 {
@@ -77,11 +76,17 @@ void copy_mpybuf_to_ringbuf(void *cookie)
     unsigned int bytes_written = 0;
 
     while (bytes_written < tx_len) {
+        // sel4cp_dbg_puts("Copying mpybuf to ringbuf");
+        // label_num("bytes_written: ", bytes_written);
+        // label_num("tx_len: ", tx_len);
         void *tx_cookie;
         uintptr_t tx_buf;
         unsigned int temp_len;
         
-        if (ring_empty(tx_ring.avail_ring)) sel4cp_notify(LWIP_CH);
+        if (ring_empty(tx_ring.avail_ring)) {
+            // sel4cp_dbg_puts("tx_ring.avail_ring is empty");
+            sel4cp_notify(LWIP_CH);
+        }
         // while (ring_empty(&tx_ring));
         int error = dequeue_avail(&tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error) {
@@ -105,27 +110,32 @@ void notified(sel4cp_channel ch)
     {
     case LWIP_CH:;
         /* Get request packet from lwip */
-        uintptr_t rx_buf;
-        void *rx_cookie;
-        unsigned int rx_len;
+        while (!ring_empty(rx_ring.used_ring)) {
+            uintptr_t rx_buf;
+            void *rx_cookie;
+            unsigned int rx_len;
 
-        int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
-        if (error) {
-            sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
-            return;
+            int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
+            if (error) {
+                sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
+                return;
+            }
+    
+            /* Init a response buf and process request */
+            tx_len = 0;
+            // sel4cp_dbg_puts("Websrv got rx\n---\n");
+            // sel4cp_dbg_puts((char *)rx_buf);
+            // sel4cp_dbg_puts("\n---\n");
+            run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
+
+            /* Copy response buf to ring buf */
+            copy_mpybuf_to_ringbuf(rx_cookie);
+
+            /* Release req buf */
+            enqueue_avail(&rx_ring, rx_buf, BUF_SIZE, NULL);
+            
+            sel4cp_notify(LWIP_CH);
         }
- 
-        /* Init a response buf and process request */
-        tx_len = 0;
-        run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
-
-        /* Copy response buf to ring buf */
-        copy_mpybuf_to_ringbuf(rx_cookie);
-
-        /* Release req buf */
-        enqueue_avail(&rx_ring, rx_buf, BUF_SIZE, NULL);
-        
-        sel4cp_notify(LWIP_CH);
         break;
     default:
         sel4cp_dbg_puts("Unknown notf\n");
