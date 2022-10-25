@@ -30,7 +30,7 @@ uintptr_t shared_websrv_lwip_vaddr;
 
 ring_handle_t rx_ring;
 ring_handle_t tx_ring;
-char tx_data[BUF_SIZE * 256] = {0};
+char tx_data[BUF_SIZE * 128] = {0};
 unsigned int tx_len;
 
 void init(void)
