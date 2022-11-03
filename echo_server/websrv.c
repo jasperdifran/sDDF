@@ -14,6 +14,7 @@
 #define ABS(a) ((a) < 0 ? -(a) : (a))
 
 #define LWIP_CH 6
+#define NFS_CH 7
 
 #define ETHER_MTU 1500
 #define NUM_BUFFERS 512
@@ -102,6 +103,13 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         
         enqueue_used(&tx_ring, tx_buf, bytes_to_write, cookie);
     }
+}
+
+void req_file(char *filename) {
+    sel4cp_dbg_puts("Requesting file: ");
+    sel4cp_dbg_puts(filename);
+    sel4cp_dbg_puts("\n");
+    sel4cp_notify(NFS_CH);
 }
 
 void notified(sel4cp_channel ch)

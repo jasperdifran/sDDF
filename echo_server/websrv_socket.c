@@ -29,43 +29,6 @@ extern websrv_state_t websrv_state;
 
 #define WHOAMI "100 WEBSRV V1.0\n"
 
-/**
- * @brief Echos for now. Must be adjusted to loop through linked list of struct pbuf.
- * 
- * @param arg 
- * @param tpcb 
- * @param p 
- * @param err 
- * @return err_t 
- */
-static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
-{
-    if (p == NULL) {
-        sel4cp_dbg_puts("p == NULL, closing socket\n");
-        tcp_close(tpcb);
-        return ERR_OK;
-    }
-
-    uintptr_t data;
-    unsigned int len;
-    void *cookie;
-
-
-    int error = dequeue_avail(&websrv_state.rx_ring, &data, &len, &cookie);
-    if (error) {
-        sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
-        return ERR_OK;
-    }
-
-    pbuf_copy_partial(p, (void *)data, p->tot_len, 0);
-
-    cookie = (void *)tpcb;
-
-    enqueue_used(&websrv_state.rx_ring, data, p->tot_len, cookie);
-
-    sel4cp_notify(WEBSRV_CH);
-    return ERR_OK;
-}
 
 void printnum(int num)
 {
@@ -94,6 +57,46 @@ void label_num(char *s, int n)
     sel4cp_dbg_puts(s);
     printnum(n);
     sel4cp_dbg_puts("\n");
+}
+
+/**
+ * @brief Echos for now. Must be adjusted to loop through linked list of struct pbuf.
+ * 
+ * @param arg 
+ * @param tpcb 
+ * @param p 
+ * @param err 
+ * @return err_t 
+ */
+static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
+{
+    if (p == NULL) {
+        sel4cp_dbg_puts("p == NULL, closing socket\n");
+        label_num("Websrv socket addr: ", (uint32_t)tpcb);
+        tcp_close(tpcb);
+        return ERR_OK;
+    }
+
+    uintptr_t data;
+    unsigned int len;
+    void *cookie;
+
+
+    int error = dequeue_avail(&websrv_state.rx_ring, &data, &len, &cookie);
+    if (error) {
+        sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
+        return ERR_OK;
+    }
+
+    pbuf_copy_partial(p, (void *)data, p->tot_len, 0);
+
+    cookie = (void *)tpcb;
+
+    enqueue_used(&websrv_state.rx_ring, data, p->tot_len, cookie);
+
+    sel4cp_notify(WEBSRV_CH);
+    tcp_recved(tpcb, p->tot_len);
+    return ERR_OK;
 }
 
 uintptr_t oom_buf;
@@ -173,6 +176,13 @@ static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t l
 
 static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
 {
+    sel4cp_dbg_puts("websrv_socket_accept new connection\n");
+    label_num("Websrv socket addr: ", (uintptr_t)newpcb);        
+    if (newpcb == NULL) {
+        sel4cp_dbg_puts("newpcb == NULL\n");
+        label_num("Err num: ", err);
+        // return ERR_OK;
+    }
     tcp_sent(newpcb, websrv_socket_sent_callback);
     tcp_recv(newpcb, websrv_socket_recv_callback);
     return ERR_OK;
@@ -184,6 +194,8 @@ int setup_tcp_socket(void)
     if (tcp_socket == NULL) {
         sel4cp_dbg_puts("Failed to open a socket for listening!");
         return -1;
+    } else {
+        sel4cp_dbg_puts("Opened a socket for listening!");
     }
 
     err_t error = tcp_bind(tcp_socket, IP_ANY_TYPE, TCP_SERVER_PORT);
@@ -194,9 +206,9 @@ int setup_tcp_socket(void)
         sel4cp_dbg_puts("Utilisation port bound to port 80");
     }
 
-    tcp_socket = tcp_listen_with_backlog_and_err(tcp_socket, 1, &error);
+    tcp_socket = tcp_listen_with_backlog_and_err(tcp_socket, 5, &error);
     if (error != ERR_OK) {
-        sel4cp_dbg_puts("Failed to listen on the utilization socket");
+        sel4cp_dbg_puts("Failed to listen on the TCP socket");
         return -1;
     }
     tcp_accept(tcp_socket, websrv_socket_accept_callback);

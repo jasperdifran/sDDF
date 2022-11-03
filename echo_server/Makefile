@@ -20,7 +20,7 @@ ifeq ($(strip $(SEL4CP_CONFIG)),)
 $(error SEL4CP_CONFIG must be specified)
 endif
 
-TOOLCHAIN := aarch64-none-elf
+TOOLCHAIN := aarch64-linux-gnu
 
 CPU := cortex-a53
 
@@ -33,12 +33,14 @@ LWIPDIR=lwip/src
 BENCHDIR=benchmark
 RINGBUFFERDIR=libsharedringbuffer
 MICROPYDIR=micropython/ports/imx8mm-sel4cp
+LIBNFSDIR=libnfs
+MUSLDIR=musl/build
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
-IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf
+IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
-LDFLAGS := -L$(BOARD_DIR)/lib -Llib
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSLDIR)/lib
 LIBS := -lsel4cp -Tsel4cp.ld -lc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
@@ -52,6 +54,8 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(RINGBUFFERDIR)/include \
 	-I$(BENCHDIR)/include \
 	-I$(MICROPYDIR)/include \
+	-I$(MUSLDIR)/include \
+	-I$(LIBNFSDIR)/include
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=$(LWIPDIR)/core/init.c \
@@ -100,6 +104,7 @@ ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o
 BENCH_OBJS := benchmark/benchmark.o
 IDLE_OBJS := benchmark/idle.o
 WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o
+NFS_OBJS := nfs.o
 
 all: directories $(IMAGE_FILE)
 
@@ -111,6 +116,9 @@ $(BUILD_DIR)/%.o: %.s Makefile
 
 $(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR)/build/websrv.o
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
+
+$(BUILD_DIR)/nfs.elf: $(addprefix $(BUILD_DIR)/, $(NFS_OBJS))
+	$(LD) $(LDFLAGS) $^ $(LIBS) -L$(LIBNFSDIR)/build/lib -lnfs -o $@
 
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@

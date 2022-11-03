@@ -117,6 +117,10 @@
 
     </protection_domain>
 
+    <protection_domain name="nfs" priority="100">
+        <program_image path="nfs.elf" />
+    </protection_domain>
+
     <channel>
         <end pd="eth" id="2" />
         <end pd="lwip" id="2" />
@@ -145,6 +149,11 @@
     <channel>
         <end pd="benchIdle" id="3" />
         <end pd="bench" id="3" />
+    </channel>
+
+    <channel>
+        <end pd="websrv" id="7" />
+        <end pd="nfs" id="7" />
     </channel>
 
 </system>
