@@ -32,6 +32,14 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
+extern void *__sysinfo;
+
+long sel4_vsyscall(long sysnum, ...)
+{
+    sel4cp_dbg_puts("******* Syscall to lwip *******\n");
+    return 0;
+}
+
 /* Memory regions. These all have to be here to keep compiler happy */
 uintptr_t rx_avail;
 uintptr_t rx_used;

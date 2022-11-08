@@ -40,8 +40,8 @@ BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
 IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSLDIR)/lib
-LIBS := -lsel4cp -Tsel4cp.ld -lc
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSLDIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
+LIBS := -lsel4cp -Tsel4cp.ld -lc -lgcc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
 REPORT_FILE = $(BUILD_DIR)/report.txt
@@ -118,14 +118,14 @@ $(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
 
 $(BUILD_DIR)/nfs.elf: $(addprefix $(BUILD_DIR)/, $(NFS_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -L$(LIBNFSDIR)/build/lib -lnfs -o $@
+	$(LD) -L$(LIBNFSDIR)/build/lib $(LDFLAGS) $^ -lnfs $(LIBS) -o $@
 
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
-# For some unknown reason, lwip needs lib/libc.a, not musl/lib/libc.a
+# For some unknown reason, lwip needs lib/libc.a, not musl/lib/libc.a // I think this is fixed now
 $(BUILD_DIR)/lwip.elf: $(addprefix $(BUILD_DIR)/, $(LWIP_OBJS))
-	$(LD) -Llib $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/benchmark.elf: $(addprefix $(BUILD_DIR)/, $(BENCH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
