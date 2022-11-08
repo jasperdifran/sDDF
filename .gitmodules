@@ -7,3 +7,6 @@
 [submodule "echo_server/musl"]
 	path = echo_server/musl
 	url = git://git.musl-libc.org/musl
+[submodule "echo_server/musllibc"]
+	path = echo_server/musllibc
+	url = git@github.com:jasperdifran/musllibc.git

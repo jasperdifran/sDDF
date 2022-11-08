@@ -123,8 +123,9 @@ $(BUILD_DIR)/nfs.elf: $(addprefix $(BUILD_DIR)/, $(NFS_OBJS))
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
+# For some unknown reason, lwip needs lib/libc.a, not musl/lib/libc.a
 $(BUILD_DIR)/lwip.elf: $(addprefix $(BUILD_DIR)/, $(LWIP_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) -Llib $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/benchmark.elf: $(addprefix $(BUILD_DIR)/, $(BENCH_OBJS))
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
