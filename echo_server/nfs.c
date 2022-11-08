@@ -3,20 +3,13 @@
 #include <string.h>
 #include <sys/time.h>
 #include <nfsc/libnfs.h>
+#include <syscall_implementation.h>
 
 #include "util.h"
 
 #define WEBSRV_CH 7
 
 struct nfs_context *nfsContext = NULL;
-
-extern void *__sysinfo;
-
-long sel4_vsyscall(long sysnum, ...)
-{
-    sel4cp_dbg_puts("sel4_vsyscall: \n");
-    return 0;
-}
 
 void nfs_mount_cb(int err, struct nfs_context *nfs, void *data, void *private_data)
 {
@@ -31,7 +24,7 @@ void nfs_mount_cb(int err, struct nfs_context *nfs, void *data, void *private_da
 void init(void)
 {
     sel4cp_dbg_puts("Init nfs pd\n");
-    __sysinfo = sel4_vsyscall;
+    syscalls_init();
 
     sel4cp_dbg_puts("init NFS: starting\n");
     nanosleep((struct timespec[]){{1, 0}}, NULL);

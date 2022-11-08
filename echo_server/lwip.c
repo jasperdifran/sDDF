@@ -8,6 +8,8 @@
 #include <sel4cp.h>
 #include <string.h>
 
+#include <syscall_implementation.h>
+
 #include "lwip/init.h"
 #include "netif/etharp.h"
 #include "lwip/pbuf.h"
@@ -31,14 +33,6 @@
 #define ETHER_MTU 1500
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
-
-extern void *__sysinfo;
-
-long sel4_vsyscall(long sysnum, ...)
-{
-    sel4cp_dbg_puts("******* Syscall to lwip *******\n");
-    return 0;
-}
 
 /* Memory regions. These all have to be here to keep compiler happy */
 uintptr_t rx_avail;
@@ -355,6 +349,8 @@ void init(void)
 {
     sel4cp_dbg_puts(sel4cp_name);
     sel4cp_dbg_puts(": elf PD init function running\n");
+
+    syscalls_init();
 
     /* Set up shared memory regions */
     ring_init(&state.rx_ring, (ring_buffer_t *)rx_avail, (ring_buffer_t *)rx_used, NULL, 1);

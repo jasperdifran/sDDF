@@ -98,13 +98,14 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 				libsharedringbuffer/shared_ringbuffer.o \
 				utilization_socket.o \
 				udp_echo_socket.o timer.o \
-				websrv_socket.o 
+				websrv_socket.o \
+				syscall_implementation.o \
 
 ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o
 BENCH_OBJS := benchmark/benchmark.o
 IDLE_OBJS := benchmark/idle.o
-WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o
-NFS_OBJS := nfs.o
+WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o 
+NFS_OBJS := nfs.o syscall_implementation.o
 
 all: directories $(IMAGE_FILE)
 
