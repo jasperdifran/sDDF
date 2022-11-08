@@ -1,5 +1,6 @@
 #include <sel4cp.h>
 #include <sel4/sel4.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 #include <nfsc/libnfs.h>
@@ -25,10 +26,13 @@ void init(void)
 {
     sel4cp_dbg_puts("Init nfs pd\n");
     syscalls_init();
+    sel4cp_dbg_puts("Init nfs pd done\n");
 
-    sel4cp_dbg_puts("init NFS: starting\n");
-    nanosleep((struct timespec[]){{1, 0}}, NULL);
-    sel4cp_dbg_puts("init NFS: nanosleep done\n");
+    nanosleep((struct timespec[]){{0, 100000000}}, NULL);
+    sel4cp_dbg_puts("Done nanosleep\n");
+
+    void *item = malloc(10);
+    sel4cp_dbg_puts("Done malloc\n");
 
     nfsContext = nfs_init_context();
     if (nfsContext == NULL)
