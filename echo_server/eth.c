@@ -7,16 +7,17 @@
 #include <stdint.h>
 #include <sel4cp.h>
 #include <sel4/sel4.h>
+#include <syscall_implementation.h>
 #include "eth.h"
 #include "shared_ringbuffer.h"
 #include "util.h"
 
 #define IRQ_CH 1
-#define TX_CH  2
-#define RX_CH  2
-#define INIT   4
+#define TX_CH 2
+#define RX_CH 2
+#define INIT 4
 
-#define MDC_FREQ    20000000UL
+#define MDC_FREQ 20000000UL
 
 /* Memory regions. These all have to be here to keep compiler happy */
 uintptr_t hw_ring_buffer_vaddr;
@@ -32,8 +33,8 @@ uintptr_t tx_used;
 uintptr_t uart_base;
 
 /* Make the minimum frame buffer 2k. This is a bit of a waste of memory, but ensures alignment */
-#define PACKET_BUFFER_SIZE  2048
-#define MAX_PACKET_SIZE     1536
+#define PACKET_BUFFER_SIZE 2048
+#define MAX_PACKET_SIZE 1536
 
 #define RX_COUNT 256
 #define TX_COUNT 256
@@ -41,13 +42,17 @@ uintptr_t uart_base;
 _Static_assert((512 * 2) * PACKET_BUFFER_SIZE <= 0x200000, "Expect rx+tx buffers to fit in single 2MB page");
 _Static_assert(sizeof(ring_buffer_t) <= 0x200000, "Expect ring buffer ring to fit in single 2MB page");
 
-struct descriptor {
+pid_t my_pid = ETH_PID;
+
+struct descriptor
+{
     uint16_t len;
     uint16_t stat;
     uint32_t addr;
 };
 
-typedef struct {
+typedef struct
+{
     unsigned int cnt;
     unsigned int remain;
     unsigned int tail;
@@ -92,22 +97,25 @@ static void set_mac(volatile struct enet_regs *reg, uint8_t *mac)
 static void
 dump_mac(uint8_t *mac)
 {
-    for (unsigned i = 0; i < 6; i++) {
+    for (unsigned i = 0; i < 6; i++)
+    {
         sel4cp_dbg_putc(hexchar((mac[i] >> 4) & 0xf));
         sel4cp_dbg_putc(hexchar(mac[i] & 0xf));
-        if (i < 5) {
+        if (i < 5)
+        {
             sel4cp_dbg_putc(':');
         }
     }
 }
 
-static uintptr_t 
+static uintptr_t
 getPhysAddr(uintptr_t virtual)
 {
     uint64_t offset = virtual - shared_dma_vaddr;
     uintptr_t phys;
 
-    if (offset < 0) {
+    if (offset < 0)
+    {
         print("getPhysAddr: offset < 0");
         return 0;
     }
@@ -141,14 +149,15 @@ enable_irqs(volatile struct enet_regs *eth, uint32_t mask)
     eth->eimr = mask;
 }
 
-static uintptr_t 
+static uintptr_t
 alloc_rx_buf(size_t buf_size, void **cookie)
 {
     uintptr_t addr;
     unsigned int len;
 
     /* Try to grab a buffer from the available ring */
-    if (driver_dequeue(rx_ring.avail_ring, &addr, &len, cookie)) {
+    if (driver_dequeue(rx_ring.avail_ring, &addr, &len, cookie))
+    {
         print("RX Available ring is empty\n");
         return 0;
     }
@@ -162,17 +171,20 @@ static void fill_rx_bufs()
 {
     ring_ctx_t *ring = &rx;
     __sync_synchronize();
-    while (ring->remain > 0) {
+    while (ring->remain > 0)
+    {
         /* request a buffer */
         void *cookie = NULL;
         uintptr_t phys = alloc_rx_buf(MAX_PACKET_SIZE, &cookie);
-        if (!phys) {
+        if (!phys)
+        {
             break;
         }
         uint16_t stat = RXD_EMPTY;
         int idx = ring->tail;
         int new_tail = idx + 1;
-        if (new_tail == ring->cnt) {
+        if (new_tail == ring->cnt)
+        {
             new_tail = 0;
             stat |= WRAP;
         }
@@ -184,7 +196,8 @@ static void fill_rx_bufs()
     }
     __sync_synchronize();
 
-    if (ring->tail != ring->head) {
+    if (ring->tail != ring->head)
+    {
         /* Make sure rx is enabled */
         eth->rdar = RDAR_RDAR;
     }
@@ -200,17 +213,20 @@ handle_rx(volatile struct enet_regs *eth)
     int was_empty = ring_empty(rx_ring.used_ring);
 
     // we don't want to dequeue packets if we have nothing to replace it with
-    while (head != ring->tail && (ring_size(rx_ring.avail_ring) > num)) {
+    while (head != ring->tail && (ring_size(rx_ring.avail_ring) > num))
+    {
         volatile struct descriptor *d = &(ring->descr[head]);
 
         /* If the slot is still marked as empty we are done. */
-        if (d->stat & RXD_EMPTY) {
+        if (d->stat & RXD_EMPTY)
+        {
             break;
         }
 
         void *cookie = ring->cookies[head];
         /* Go to next buffer, handle roll-over. */
-        if (++head == ring->cnt) {
+        if (++head == ring->cnt)
+        {
             head = 0;
         }
         ring->head = head;
@@ -224,11 +240,12 @@ handle_rx(volatile struct enet_regs *eth)
         num++;
     }
 
-    /* Notify client (only if we have actually processed a packet and 
+    /* Notify client (only if we have actually processed a packet and
     the client hasn't already been notified!) */
-    if (num > 1 && was_empty) {
+    if (num > 1 && was_empty)
+    {
         sel4cp_notify(RX_CH);
-    } 
+    }
 }
 
 static void
@@ -240,10 +257,13 @@ complete_tx(volatile struct enet_regs *eth)
     unsigned int head = ring->head;
     unsigned int cnt = 0;
 
-    while (head != ring->tail) {
-        if (0 == cnt) {
+    while (head != ring->tail)
+    {
+        if (0 == cnt)
+        {
             cnt = tx_lengths[head];
-            if ((0 == cnt) || (cnt > TX_COUNT)) {
+            if ((0 == cnt) || (cnt > TX_COUNT))
+            {
                 /* We are not supposed to read 0 here. */
                 print("complete_tx with cnt=0 or max");
                 return;
@@ -255,22 +275,27 @@ complete_tx(volatile struct enet_regs *eth)
         volatile struct descriptor *d = &(ring->descr[head]);
 
         /* If this buffer was not sent, we can't release any buffer. */
-        if (d->stat & TXD_READY) {
+        if (d->stat & TXD_READY)
+        {
             /* give it another chance */
-            if (!(eth->tdar & TDAR_TDAR)) {
+            if (!(eth->tdar & TDAR_TDAR))
+            {
                 eth->tdar = TDAR_TDAR;
             }
-            if (d->stat & TXD_READY) {
+            if (d->stat & TXD_READY)
+            {
                 return;
             }
         }
 
         /* Go to next buffer, handle roll-over. */
-        if (++head == TX_COUNT) {
+        if (++head == TX_COUNT)
+        {
             head = 0;
         }
 
-        if (0 == --cnt) {
+        if (0 == --cnt)
+        {
             ring->head = head;
             /* race condition if add/remove is not synchronized. */
             ring->remain += cnt_org;
@@ -285,23 +310,26 @@ complete_tx(volatile struct enet_regs *eth)
      * zero, then there is some kind of overflow or data corruption. The number
      * of tx descriptors holding data can't exceed the space in the ring.
      */
-    if (0 != cnt) {
+    if (0 != cnt)
+    {
         print("head reached tail, but cnt!= 0");
     }
 }
 
 static void
 raw_tx(volatile struct enet_regs *eth, unsigned int num, uintptr_t *phys,
-                  unsigned int *len, void *cookie)
+       unsigned int *len, void *cookie)
 {
     ring_ctx_t *ring = &tx;
 
     /* Ensure we have room */
-    if (ring->remain < num) {
+    if (ring->remain < num)
+    {
         /* not enough room, try to complete some and check again */
         complete_tx(eth);
         unsigned int rem = ring->remain;
-        if (rem < num) {
+        if (rem < num)
+        {
             print("TX queue lacks space");
             return;
         }
@@ -313,14 +341,17 @@ raw_tx(volatile struct enet_regs *eth, unsigned int num, uintptr_t *phys,
     unsigned int tail_new = tail;
 
     unsigned int i = num;
-    while (i-- > 0) {
+    while (i-- > 0)
+    {
         uint16_t stat = TXD_READY;
-        if (0 == i) {
+        if (0 == i)
+        {
             stat |= TXD_ADDCRC | TXD_LAST;
         }
 
         unsigned int idx = tail_new;
-        if (++tail_new == TX_COUNT) {
+        if (++tail_new == TX_COUNT)
+        {
             tail_new = 0;
             stat |= WRAP;
         }
@@ -335,51 +366,57 @@ raw_tx(volatile struct enet_regs *eth, unsigned int num, uintptr_t *phys,
 
     __sync_synchronize();
 
-    if (!(eth->tdar & TDAR_TDAR)) {
+    if (!(eth->tdar & TDAR_TDAR))
+    {
         eth->tdar = TDAR_TDAR;
     }
-
 }
 
-static void 
+static void
 handle_eth(volatile struct enet_regs *eth)
 {
     uint32_t e = eth->eir & IRQ_MASK;
     /* write to clear events */
     eth->eir = e;
 
-    while (e & IRQ_MASK) {
-        if (e & NETIRQ_TXF) {
+    while (e & IRQ_MASK)
+    {
+        if (e & NETIRQ_TXF)
+        {
             complete_tx(eth);
         }
-        if (e & NETIRQ_RXF) {
+        if (e & NETIRQ_RXF)
+        {
             handle_rx(eth);
             fill_rx_bufs(eth);
         }
-        if (e & NETIRQ_EBERR) {
+        if (e & NETIRQ_EBERR)
+        {
             print("Error: System bus/uDMA");
-            while (1);
+            while (1)
+                ;
         }
         e = eth->eir & IRQ_MASK;
         eth->eir = e;
     }
 }
 
-static void 
+static void
 handle_tx(volatile struct enet_regs *eth)
 {
     uintptr_t buffer = 0;
     unsigned int len = 0;
     void *cookie = NULL;
 
-    // We need to put in an empty condition here. 
-    while ((tx.remain > 1) && !driver_dequeue(tx_ring.used_ring, &buffer, &len, &cookie)) {
+    // We need to put in an empty condition here.
+    while ((tx.remain > 1) && !driver_dequeue(tx_ring.used_ring, &buffer, &len, &cookie))
+    {
         uintptr_t phys = getPhysAddr(buffer);
         raw_tx(eth, 1, &phys, &len, cookie);
     }
 }
 
-static void 
+static void
 eth_setup(void)
 {
     get_mac_addr(eth, mac);
@@ -406,22 +443,25 @@ eth_setup(void)
 
     /* Perform reset */
     eth->ecr = ECR_RESET;
-    while (eth->ecr & ECR_RESET);
+    while (eth->ecr & ECR_RESET)
+        ;
     eth->ecr |= ECR_DBSWP;
 
     /* Clear and mask interrupts */
     eth->eimr = 0x00000000;
-    eth->eir  = 0xffffffff;
+    eth->eir = 0xffffffff;
 
     /* set MDIO freq */
     eth->mscr = 24 << 1;
 
     /* Disable */
     eth->mibc |= MIBC_DIS;
-    while (!(eth->mibc & MIBC_IDLE));
+    while (!(eth->mibc & MIBC_IDLE))
+        ;
     /* Clear */
     eth->mibc |= MIBC_CLEAR;
-    while (!(eth->mibc & MIBC_IDLE));
+    while (!(eth->mibc & MIBC_IDLE))
+        ;
     /* Restart */
     eth->mibc &= ~MIBC_CLEAR;
     eth->mibc &= ~MIBC_DIS;
@@ -432,8 +472,9 @@ eth_setup(void)
     eth->gaur = 0;
     eth->galr = 0;
 
-    if (eth->palr == 0) {
-        // the mac address needs setting again. 
+    if (eth->palr == 0)
+    {
+        // the mac address needs setting again.
         set_mac(eth, mac);
     }
 
@@ -495,49 +536,51 @@ void init(void)
 {
     sel4cp_dbg_puts(sel4cp_name);
     sel4cp_dbg_puts(": elf PD init function running\n");
+    syscalls_init();
 
     eth_setup();
 
     /* Now wait for notification from lwip that buffers are initialised */
 }
 
-seL4_MessageInfo_t
-protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
+seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
 {
-    switch (ch) {
-        case INIT:
-            // return the MAC address. 
-            sel4cp_mr_set(0, eth->palr);
-            sel4cp_mr_set(1, eth->paur);
-            return sel4cp_msginfo_new(0, 2);
-        case TX_CH:
-            handle_tx(eth);
-            break;
-        default:
-            sel4cp_dbg_puts("Received ppc on unexpected channel ");
-            puthex64(ch);
-            break;
+    switch (ch)
+    {
+    case INIT:
+        // return the MAC address.
+        sel4cp_mr_set(0, eth->palr);
+        sel4cp_mr_set(1, eth->paur);
+        return sel4cp_msginfo_new(0, 2);
+    case TX_CH:
+        handle_tx(eth);
+        break;
+    default:
+        sel4cp_dbg_puts("Received ppc on unexpected channel ");
+        puthex64(ch);
+        break;
     }
     return sel4cp_msginfo_new(0, 0);
 }
 
 void notified(sel4cp_channel ch)
 {
-    switch(ch) {
-        case IRQ_CH:
-            handle_eth(eth);
-            have_signal = true;
-            signal_msg = seL4_MessageInfo_new(IRQAckIRQ, 0, 0, 0);
-            signal = (BASE_IRQ_CAP + IRQ_CH);
-            return;
-        case INIT:
-            init_post();
-            break;
-        case TX_CH:
-            handle_tx(eth);
-            break;
-        default:
-            sel4cp_dbg_puts("eth driver: received notification on unexpected channel\n");
-            break;
+    switch (ch)
+    {
+    case IRQ_CH:
+        handle_eth(eth);
+        have_signal = true;
+        signal_msg = seL4_MessageInfo_new(IRQAckIRQ, 0, 0, 0);
+        signal = (BASE_IRQ_CAP + IRQ_CH);
+        return;
+    case INIT:
+        init_post();
+        break;
+    case TX_CH:
+        handle_tx(eth);
+        break;
+    default:
+        sel4cp_dbg_puts("eth driver: received notification on unexpected channel\n");
+        break;
     }
 }
