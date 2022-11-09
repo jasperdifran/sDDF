@@ -40,7 +40,7 @@ BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
 IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
-LDFLAGS := -L$(MUSLDIR)/lib -L$(BOARD_DIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
+LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSLDIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
 LIBS := -lsel4cp -Tsel4cp.ld -lc -lgcc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
@@ -101,10 +101,10 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 				websrv_socket.o \
 				syscall_implementation.o \
 
-ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o
-BENCH_OBJS := benchmark/benchmark.o
-IDLE_OBJS := benchmark/idle.o
-WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o 
+ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o syscall_implementation.o
+BENCH_OBJS := benchmark/benchmark.o syscall_implementation.o
+IDLE_OBJS := benchmark/idle.o syscall_implementation.o
+WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o syscall_implementation.o
 NFS_OBJS := nfs.o syscall_implementation.o
 
 all: directories $(IMAGE_FILE)
@@ -119,9 +119,9 @@ $(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
 
 $(BUILD_DIR)/nfs.elf: $(addprefix $(BUILD_DIR)/, $(NFS_OBJS))
-	$(LD) -L$(LIBNFSDIR)/build/lib $(LDFLAGS) $^ -lnfs $(LIBS) -o $@ --verbose
+	$(LD) -L$(LIBNFSDIR)/build/lib $(LDFLAGS) $^ -lnfs $(LIBS) -o $@
 
-$(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS))
+$(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS)) 
 	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
 
 # For some unknown reason, lwip needs lib/libc.a, not musl/lib/libc.a // I think this is fixed now
