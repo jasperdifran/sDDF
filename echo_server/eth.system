@@ -117,7 +117,7 @@
 
     </protection_domain>
 
-    <protection_domain name="nfs" priority="100">
+    <protection_domain name="nfs" priority="104">
         <program_image path="nfs.elf" />
     </protection_domain>
 
