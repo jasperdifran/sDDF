@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <sel4cp.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include <syscall_implementation.h>
 
@@ -48,6 +49,8 @@ uintptr_t rx_websrv_avail;
 uintptr_t rx_websrv_used;
 uintptr_t tx_websrv_avail;
 uintptr_t tx_websrv_used;
+
+pid_t my_pid = LWIP_PID;
 
 typedef enum
 {

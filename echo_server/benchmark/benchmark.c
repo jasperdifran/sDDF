@@ -7,6 +7,7 @@
 #include <sel4cp.h>
 #include <sel4/sel4.h>
 #include <sel4/benchmark_track_types.h>
+#include <syscall_implementation.h>
 #include "sel4bench.h"
 #include "fence.h"
 #include "bench.h"
@@ -22,6 +23,8 @@
 #define STOP 2
 
 #define INIT 3
+
+pid_t my_pid = BENCH_PID;
 
 uintptr_t uart_base;
 uintptr_t cyclecounters_vaddr;
@@ -61,11 +64,11 @@ static void
 sel4cp_benchmark_start(void)
 {
     seL4_BenchmarkResetThreadUtilisation(TCB_CAP);
-    seL4_BenchmarkResetLog(); 
+    seL4_BenchmarkResetLog();
 }
 
 static void
-sel4cp_benchmark_stop(uint64_t *total, uint64_t* idle, uint64_t *kernel, uint64_t *entries)
+sel4cp_benchmark_stop(uint64_t *total, uint64_t *idle, uint64_t *kernel, uint64_t *entries)
 {
     seL4_BenchmarkFinalizeLog();
     seL4_BenchmarkGetThreadUtilisation(TCB_CAP);
@@ -90,21 +93,34 @@ static inline void seL4_BenchmarkTrackDumpSummary(benchmark_track_kernel_entry_t
     seL4_Word debug_fault = 0;
     seL4_Word other = 0;
 
-    while (logBuffer[index].start_time != 0 && index < logSize) {
-        if (logBuffer[index].entry.path == Entry_Syscall) {
-            if (logBuffer[index].entry.is_fastpath) {
+    while (logBuffer[index].start_time != 0 && index < logSize)
+    {
+        if (logBuffer[index].entry.path == Entry_Syscall)
+        {
+            if (logBuffer[index].entry.is_fastpath)
+            {
                 fastpaths++;
             }
             syscall_entries++;
-        } else if (logBuffer[index].entry.path == Entry_Interrupt) {
+        }
+        else if (logBuffer[index].entry.path == Entry_Interrupt)
+        {
             interrupt_entries++;
-        } else if (logBuffer[index].entry.path == Entry_UserLevelFault) {
+        }
+        else if (logBuffer[index].entry.path == Entry_UserLevelFault)
+        {
             userlevelfault_entries++;
-        } else if (logBuffer[index].entry.path == Entry_VMFault) {
+        }
+        else if (logBuffer[index].entry.path == Entry_VMFault)
+        {
             vmfault_entries++;
-        } else if (logBuffer[index].entry.path == Entry_DebugFault) {
+        }
+        else if (logBuffer[index].entry.path == Entry_DebugFault)
+        {
             debug_fault++;
-        } else {
+        }
+        else
+        {
             other++;
         }
         index++;
@@ -113,7 +129,7 @@ static inline void seL4_BenchmarkTrackDumpSummary(benchmark_track_kernel_entry_t
     print("Number of system call invocations ");
     puthex64(syscall_entries);
     print(" and fastpaths ")
-    puthex64(fastpaths);
+        puthex64(fastpaths);
     print("\n");
     print("Number of interrupt invocations ");
     puthex64(interrupt_entries);
@@ -133,73 +149,77 @@ static inline void seL4_BenchmarkTrackDumpSummary(benchmark_track_kernel_entry_t
 }
 #endif
 
-
-void notified(sel4cp_channel ch) 
+void notified(sel4cp_channel ch)
 {
-    switch(ch) {
-        case START:
-            sel4bench_reset_counters();
-            THREAD_MEMORY_RELEASE();
-            inst->instr_idle_count = 0;
-            inst->instr_overflows = 0;
+    switch (ch)
+    {
+    case START:
+        sel4bench_reset_counters();
+        THREAD_MEMORY_RELEASE();
+        inst->instr_idle_count = 0;
+        inst->instr_overflows = 0;
 
-            sel4bench_start_counters(benchmark_bf);
+        sel4bench_start_counters(benchmark_bf);
 
-            #ifdef CONFIG_BENCHMARK_TRACK_UTILISATION
-            sel4cp_benchmark_start();
-            #endif
+#ifdef CONFIG_BENCHMARK_TRACK_UTILISATION
+        sel4cp_benchmark_start();
+#endif
 
-            #ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
-            seL4_BenchmarkResetLog();
-            #endif
+#ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
+        seL4_BenchmarkResetLog();
+#endif
 
-            break;
-        case STOP:
-            sel4bench_get_counters(benchmark_bf, &counter_values[0]);
-            sel4bench_stop_counters(benchmark_bf);
+        break;
+    case STOP:
+        sel4bench_get_counters(benchmark_bf, &counter_values[0]);
+        sel4bench_stop_counters(benchmark_bf);
 
-            #ifdef CONFIG_BENCHMARK_TRACK_UTILISATION
-            uint64_t total;
-            uint64_t kernel;
-            uint64_t entries;
-            uint64_t idle;
-            sel4cp_benchmark_stop(&total, &idle, &kernel, &entries);
-            /* Dump the counters */
-            print("{\n");
-            for (int i = 0; i < ARRAY_SIZE(benchmarking_events); i++) {
-                print(counter_names[i]);
-                print(": ");
-                if (i == 4) {
-                    uint64_t instr = (counter_values[i] + (UINT_MAX * inst->instr_overflows)) - inst->instr_idle_count;
-                    puthex64(instr);
-                } else {
-                    puthex64(counter_values[i]);
-                }
-                print("\n");
+#ifdef CONFIG_BENCHMARK_TRACK_UTILISATION
+        uint64_t total;
+        uint64_t kernel;
+        uint64_t entries;
+        uint64_t idle;
+        sel4cp_benchmark_stop(&total, &idle, &kernel, &entries);
+        /* Dump the counters */
+        print("{\n");
+        for (int i = 0; i < ARRAY_SIZE(benchmarking_events); i++)
+        {
+            print(counter_names[i]);
+            print(": ");
+            if (i == 4)
+            {
+                uint64_t instr = (counter_values[i] + (UINT_MAX * inst->instr_overflows)) - inst->instr_idle_count;
+                puthex64(instr);
             }
-
-            print("KernelUtilisation");
-            print(": ");
-            puthex64(kernel);
+            else
+            {
+                puthex64(counter_values[i]);
+            }
             print("\n");
-            print("KernelEntries");
-            print(": ");
-            puthex64(entries);
-            print("\n");
-            print("}\n");
-            #endif
+        }
 
-            #ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
-            entries = seL4_BenchmarkFinalizeLog();
-            print("KernelEntries");
-            print(": ");
-            puthex64(entries);
-            seL4_BenchmarkTrackDumpSummary(log_buffer, entries);
-            #endif
+        print("KernelUtilisation");
+        print(": ");
+        puthex64(kernel);
+        print("\n");
+        print("KernelEntries");
+        print(": ");
+        puthex64(entries);
+        print("\n");
+        print("}\n");
+#endif
 
-            break;
-        default:
-            print("Bench thread notified on unexpected channel\n");
+#ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
+        entries = seL4_BenchmarkFinalizeLog();
+        print("KernelEntries");
+        print(": ");
+        puthex64(entries);
+        seL4_BenchmarkTrackDumpSummary(log_buffer, entries);
+#endif
+
+        break;
+    default:
+        print("Bench thread notified on unexpected channel\n");
     }
 }
 
@@ -209,12 +229,13 @@ void init(void)
     seL4_Word n_counters = sel4bench_get_num_counters();
     int n_chunks = DIV_ROUND_UP(ARRAY_SIZE(benchmarking_events), n_counters);
 
-
     counter_bitfield_t mask = 0;
 
-    for (seL4_Word i = 0; i < n_counters; i++) {
+    for (seL4_Word i = 0; i < n_counters; i++)
+    {
         seL4_Word counter = i;
-        if (counter >= ARRAY_SIZE(benchmarking_events)) {
+        if (counter >= ARRAY_SIZE(benchmarking_events))
+        {
             break;
         }
         sel4bench_set_count_event(i, benchmarking_events[counter]);
@@ -231,10 +252,13 @@ void init(void)
 
 #ifdef CONFIG_BENCHMARK_TRACK_KERNEL_ENTRIES
     int res_buf = seL4_BenchmarkSetLogBuffer(LOG_BUFFER_CAP);
-    if (res_buf) {
+    if (res_buf)
+    {
         print("Could not set log buffer");
         puthex64(res_buf);
-    } else {
+    }
+    else
+    {
         print("We set the log buffer\n");
     }
 #endif

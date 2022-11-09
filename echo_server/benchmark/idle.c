@@ -7,6 +7,7 @@
 #include <sel4cp.h>
 #include <sel4/sel4.h>
 #include <sel4/benchmark_track_types.h>
+#include <syscall_implementation.h>
 #include "sel4bench.h"
 #include "fence.h"
 #include "bench.h"
@@ -19,6 +20,8 @@
 
 uintptr_t cyclecounters_vaddr;
 uintptr_t instructionCount_vaddr;
+
+pid_t my_pid = IDLE_PID;
 
 struct bench *b = (void *)(uintptr_t)0x5010000;
 
@@ -35,20 +38,24 @@ void count_idle(void)
     inst->instr_idle_count = 0;
     uint64_t instr_count = 0;*/
 
-    while (1) {
+    while (1)
+    {
 
         b->ts = (uint64_t)sel4bench_get_cycle_count();
         uint64_t diff;
-        //uint64_t instr_diff;
+        // uint64_t instr_diff;
 
-        //instr_count = (uint64_t)sel4bench_get_counter(4); 
+        // instr_count = (uint64_t)sel4bench_get_counter(4);
 
         /* Handle overflow: This thread needs to run at least 2 times
            within any ULONG_MAX cycles period to detect overflows */
-        if (b->ts < b->prev) {
+        if (b->ts < b->prev)
+        {
             diff = ULONG_MAX - b->prev + b->ts + 1;
             b->overflows++;
-        } else {
+        }
+        else
+        {
             diff = b->ts - b->prev;
         }
 
@@ -62,27 +69,29 @@ void count_idle(void)
             instr_diff = instr_count - instr_prev;
         }*/
 
-        if (diff < MAGIC_CYCLES) {
+        if (diff < MAGIC_CYCLES)
+        {
             COMPILER_MEMORY_FENCE();
-            //inst->instr_idle_count += instr_diff;
+            // inst->instr_idle_count += instr_diff;
             b->ccount += diff;
             COMPILER_MEMORY_FENCE();
         }
 
         b->prev = b->ts;
-        //instr_prev = instr_count;
+        // instr_prev = instr_count;
     }
 }
 
 void notified(sel4cp_channel ch)
 {
-    switch(ch) {
-        case INIT: 
-            // init is complete so we can start counting.
-            count_idle();
-            break;
-        default:
-            sel4cp_dbg_puts("Idle thread notified on unexpected channel\n");
+    switch (ch)
+    {
+    case INIT:
+        // init is complete so we can start counting.
+        count_idle();
+        break;
+    default:
+        sel4cp_dbg_puts("Idle thread notified on unexpected channel\n");
     }
 }
 

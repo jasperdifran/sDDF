@@ -1,14 +1,18 @@
 #include <sel4cp.h>
 #include <sel4/sel4.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 #include <nfsc/libnfs.h>
+#include <sys/types.h>
 #include <syscall_implementation.h>
 
 #include "util.h"
 
 #define WEBSRV_CH 7
+
+pid_t my_pid = NFS_PID;
 
 struct nfs_context *nfsContext = NULL;
 
@@ -24,17 +28,11 @@ void nfs_mount_cb(int err, struct nfs_context *nfs, void *data, void *private_da
 
 void init(void)
 {
-    sel4cp_dbg_puts("Init nfs pd\n");
     syscalls_init();
-    sel4cp_dbg_puts("Init nfs pd done\n");
-
-    nanosleep((struct timespec[]){{0, 100000000}}, NULL);
-    sel4cp_dbg_puts("Done nanosleep\n");
-
-    void *item = malloc(10);
-    sel4cp_dbg_puts("Done malloc\n");
+    printf("NFS: init\n");
 
     nfsContext = nfs_init_context();
+    return;
     if (nfsContext == NULL)
     {
         sel4cp_dbg_puts("Failed to init nfs context\n");
