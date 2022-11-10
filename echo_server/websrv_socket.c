@@ -1,12 +1,12 @@
 /**
  * @file websrv_socket.c
- * @author Jasper Di Francesco 
+ * @author Jasper Di Francesco
  * @brief This file exposes the socket interface for the webserver. It exists in the LWIP PD.
  * @version 0.1
  * @date 2022-10-06
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include <sel4cp.h>
@@ -29,22 +29,24 @@ extern websrv_state_t websrv_state;
 
 #define WHOAMI "100 WEBSRV V1.0\n"
 
-
 void printnum(int num)
 {
     char buf[10];
     int i = 0;
-    if (num == 0) {
+    if (num == 0)
+    {
         sel4cp_dbg_putc('0');
         return;
     }
-    while (num > 0) {
+    while (num > 0)
+    {
         buf[i] = num % 10 + '0';
         num /= 10;
         i++;
     }
-    //reverse buf
-    for (int j = 0; j < i / 2; j++) {
+    // reverse buf
+    for (int j = 0; j < i / 2; j++)
+    {
         char tmp = buf[j];
         buf[j] = buf[i - j - 1];
         buf[i - j - 1] = tmp;
@@ -61,18 +63,17 @@ void label_num(char *s, int n)
 
 /**
  * @brief Echos for now. Must be adjusted to loop through linked list of struct pbuf.
- * 
- * @param arg 
- * @param tpcb 
- * @param p 
- * @param err 
- * @return err_t 
+ *
+ * @param arg
+ * @param tpcb
+ * @param p
+ * @param err
+ * @return err_t
  */
 static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 {
-    if (p == NULL) {
-        sel4cp_dbg_puts("p == NULL, closing socket\n");
-        label_num("Websrv socket addr: ", (uint32_t)tpcb);
+    if (p == NULL)
+    {
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -81,9 +82,9 @@ static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct
     unsigned int len;
     void *cookie;
 
-
     int error = dequeue_avail(&websrv_state.rx_ring, &data, &len, &cookie);
-    if (error) {
+    if (error)
+    {
         sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
         return ERR_OK;
     }
@@ -108,7 +109,8 @@ err_t websrv_oom_retry_write()
 {
     // sel4cp_dbg_puts("websrv_oom_retry_write... ");
     int ret = tcp_write(oom_pcb, (char *)oom_buf, oom_len, 1);
-    if (ret != ERR_OK) {
+    if (ret != ERR_OK)
+    {
         // sel4cp_dbg_puts("Failed\n");
         tcp_output(oom_pcb);
         return ERR_OK;
@@ -120,33 +122,37 @@ err_t websrv_oom_retry_write()
     oom_len = 0;
     oom_pcb = NULL;
     failed_write = 0;
-    
+
     websrv_socket_send_response();
 
     return ERR_OK;
 }
 
-int websrv_socket_send_response() 
+int websrv_socket_send_response()
 {
-    if (failed_write) {
+    if (failed_write)
+    {
         websrv_oom_retry_write();
         return -1;
     }
-    err_t error;
-    while (!ring_empty(websrv_state.tx_ring.used_ring)) {
+    err_t error = ERR_OK;
+    while (!ring_empty(websrv_state.tx_ring.used_ring))
+    {
         // sel4cp_dbg_puts("Attempting to send response\n");
         uintptr_t tx_buf;
         unsigned int len;
         void *cookie;
         error = (err_t)dequeue_used(&websrv_state.tx_ring, &tx_buf, &len, &cookie);
-        if (error) {
+        if (error)
+        {
             sel4cp_dbg_puts("Failed to dequeue used from tx_ring\n");
             return -1;
         }
 
         error = tcp_write((struct tcp_pcb *)cookie, (char *)tx_buf, len, 1);
         // Note this is going to happen as soon as files are over about 10k
-        if (error == ERR_MEM) {
+        if (error == ERR_MEM)
+        {
             // sel4cp_dbg_puts("Out of memory\n");
             oom_buf = tx_buf;
             oom_len = len;
@@ -167,7 +173,8 @@ static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t l
     // sel4cp_dbg_puts("websrv_socket_sent_callback\n");
     // label_num("Tx used ring empty: ", ring_empty(websrv_state.tx_ring.used_ring));
     // label_num("Tx used ring empty: ", ring_empty(websrv_state.tx_ring.avail_ring));
-    if (failed_write) {
+    if (failed_write)
+    {
         // sel4cp_dbg_puts("Failed write, retrying\n");
         websrv_oom_retry_write();
     }
@@ -177,8 +184,9 @@ static err_t websrv_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t l
 static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err)
 {
     sel4cp_dbg_puts("websrv_socket_accept new connection\n");
-    label_num("Websrv socket addr: ", (uintptr_t)newpcb);        
-    if (newpcb == NULL) {
+    label_num("Websrv socket addr: ", (uintptr_t)newpcb);
+    if (newpcb == NULL)
+    {
         sel4cp_dbg_puts("newpcb == NULL\n");
         label_num("Err num: ", err);
         // return ERR_OK;
@@ -188,26 +196,33 @@ static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, er
     return ERR_OK;
 }
 
-int setup_tcp_socket(void) 
+int setup_tcp_socket(void)
 {
     tcp_socket = tcp_new_ip_type(IPADDR_TYPE_V4);
-    if (tcp_socket == NULL) {
+    if (tcp_socket == NULL)
+    {
         sel4cp_dbg_puts("Failed to open a socket for listening!");
         return -1;
-    } else {
+    }
+    else
+    {
         sel4cp_dbg_puts("Opened a socket for listening!");
     }
 
     err_t error = tcp_bind(tcp_socket, IP_ANY_TYPE, TCP_SERVER_PORT);
-    if (error) {
+    if (error)
+    {
         sel4cp_dbg_puts("Failed to bind the TCP socket");
         return -1;
-    } else {
+    }
+    else
+    {
         sel4cp_dbg_puts("Utilisation port bound to port 80");
     }
 
     tcp_socket = tcp_listen_with_backlog_and_err(tcp_socket, 5, &error);
-    if (error != ERR_OK) {
+    if (error != ERR_OK)
+    {
         sel4cp_dbg_puts("Failed to listen on the TCP socket");
         return -1;
     }

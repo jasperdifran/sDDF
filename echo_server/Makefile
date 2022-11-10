@@ -35,12 +35,13 @@ RINGBUFFERDIR=libsharedringbuffer
 MICROPYDIR=micropython/ports/imx8mm-sel4cp
 LIBNFSDIR=libnfs
 MUSLDIR=musl/build
+SEL4CPRUNTIME=sel4cp_runtime
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
 IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
-LDFLAGS := -L$(BOARD_DIR)/lib -L$(MUSLDIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
+LDFLAGS := -L$(SEL4CPRUNTIME)/lib -L$(MUSLDIR)/lib -L$(BOARD_DIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
 LIBS := -lsel4cp -Tsel4cp.ld -lc -lgcc
 
 IMAGE_FILE = $(BUILD_DIR)/loader.img
@@ -55,7 +56,8 @@ CFLAGS += -I$(BOARD_DIR)/include \
 	-I$(BENCHDIR)/include \
 	-I$(MICROPYDIR)/include \
 	-I$(MUSLDIR)/include \
-	-I$(LIBNFSDIR)/include
+	-I$(LIBNFSDIR)/include \
+	-I$(SEL4CPRUNTIME)/include \
 
 # COREFILES, CORE4FILES: The minimum set of files needed for lwIP.
 COREFILES=$(LWIPDIR)/core/init.c \
@@ -91,6 +93,8 @@ CORE4FILES=$(LWIPDIR)/core/ipv4/autoip.c \
 # NETIFFILES: Files implementing various generic network interface functions
 NETIFFILES=$(LWIPDIR)/netif/ethernet.c
 
+SHARED_OBJS := $(SEL4CPRUNTIME)/syscall_time.o $(SEL4CPRUNTIME)/syscall_implementation.o $(SEL4CPRUNTIME)/sel4cp_runtime.o
+
 # LWIPFILES: All the above.
 LWIPFILES=lwip.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
 LWIP_OBJS := $(LWIPFILES:.c=.o) \
@@ -99,15 +103,19 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 				utilization_socket.o \
 				udp_echo_socket.o timer.o \
 				websrv_socket.o \
-				syscall_implementation.o \
+				$(SHARED_OBJS)
 
-ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o syscall_implementation.o
-BENCH_OBJS := benchmark/benchmark.o syscall_implementation.o
-IDLE_OBJS := benchmark/idle.o syscall_implementation.o
-WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o syscall_implementation.o
-NFS_OBJS := nfs.o syscall_implementation.o
 
-all: directories $(IMAGE_FILE)
+ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o $(SHARED_OBJS)
+BENCH_OBJS := benchmark/benchmark.o $(SHARED_OBJS)
+IDLE_OBJS := benchmark/idle.o $(SHARED_OBJS)
+WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o $(SHARED_OBJS)
+NFS_OBJS := nfs.o $(SHARED_OBJS)
+
+all: directories $(IMAGE_FILE) sel4cp_runtime/lib/crt0.o
+
+sel4cp_runtime/lib/crt0.o: $(SEL4CPRUNTIME)/lib/crt0.s
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BUILD_DIR)/%.o: %.c Makefile
 	$(CC) -c $(CFLAGS) $< -o $@
@@ -116,23 +124,23 @@ $(BUILD_DIR)/%.o: %.s Makefile
 	$(AS) -g3 -mcpu=$(CPU) $< -o $@
 
 $(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR)/build/websrv.o
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@ 
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@ 
 
 $(BUILD_DIR)/nfs.elf: $(addprefix $(BUILD_DIR)/, $(NFS_OBJS))
-	$(LD) -L$(LIBNFSDIR)/build/lib $(LDFLAGS) $^ -lnfs $(LIBS) -o $@
+	$(LD) $(MUSLDIR)/lib/crt1.o -L$(LIBNFSDIR)/build/lib $(LDFLAGS) $^ -lnfs $(LIBS) -o $@
 
 $(BUILD_DIR)/eth.elf: $(addprefix $(BUILD_DIR)/, $(ETH_OBJS)) 
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@ --verbose
 
 # For some unknown reason, lwip needs lib/libc.a, not musl/lib/libc.a // I think this is fixed now
 $(BUILD_DIR)/lwip.elf: $(addprefix $(BUILD_DIR)/, $(LWIP_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/benchmark.elf: $(addprefix $(BUILD_DIR)/, $(BENCH_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/idle.elf: $(addprefix $(BUILD_DIR)/, $(IDLE_OBJS))
-	$(LD) $(LDFLAGS) $^ $(LIBS) -o $@
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(IMAGE_FILE) $(REPORT_FILE): $(addprefix $(BUILD_DIR)/, $(IMAGES)) eth.system
 	$(SEL4CP_TOOL) eth.system --search-path $(BUILD_DIR) --board $(SEL4CP_BOARD) --config $(SEL4CP_CONFIG) -o $(IMAGE_FILE) -r $(REPORT_FILE)
@@ -150,6 +158,7 @@ directories:
 	$(info $(shell mkdir -p $(BUILD_DIR)/lwip/src/core/ipv4)) \
     $(info $(shell mkdir -p $(BUILD_DIR)/libsharedringbuffer))	\
 	$(info $(shell mkdir -p $(BUILD_DIR)/benchmark))	\
+	$(info $(shell mkdir -p $(BUILD_DIR)/sel4cp_runtime))	\
 
 clean:
 	rm -f *.o *.elf .depend*

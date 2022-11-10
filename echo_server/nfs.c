@@ -28,8 +28,12 @@ void nfs_mount_cb(int err, struct nfs_context *nfs, void *data, void *private_da
 
 void init(void)
 {
+    sel4cp_dbg_puts("init: starting nfs client\n");
     syscalls_init();
-    printf("NFS: init\n");
+    char *ptr = malloc(5);
+    sel4cp_dbg_puts("init: malloced ptr\n");
+    strcpy(ptr, "hi");
+    sel4cp_dbg_puts(ptr);
 
     nfsContext = nfs_init_context();
     return;

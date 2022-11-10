@@ -69,6 +69,7 @@ long sys_mmap(va_list ap)
     int flags = va_arg(ap, int);
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
+    (void)fd, (void)offset, (void)prot, (void)addr;
 
     if (flags & MAP_ANONYMOUS)
     {
@@ -101,6 +102,12 @@ long sys_write(va_list ap)
         return -1;
     }
 }
+long sys_gettime(va_list ap)
+{
+    struct timespec *tp = va_arg(ap, struct timespec *);
+    (void)tp;
+    return rtc_now_ms();
+}
 
 long sys_getpid(va_list ap)
 {
@@ -109,12 +116,16 @@ long sys_getpid(va_list ap)
 
 void syscalls_init(void)
 {
+    /* Timer init */
+    rtc_enable();
+
+    /* Syscall table init */
     __sysinfo = sel4_vsyscall;
     syscall_table[__NR_brk] = (muslcsys_syscall_t)sys_brk;
     syscall_table[__NR_write] = (muslcsys_syscall_t)sys_write;
     syscall_table[__NR_mmap] = (muslcsys_syscall_t)sys_mmap;
     syscall_table[__NR_getpid] = (muslcsys_syscall_t)sys_getpid;
-    // muslcsys_install_syscall(__NR_gettid, sys_gettid);
+    syscall_table[__NR_clock_gettime] = (muslcsys_syscall_t)sys_gettime;
 }
 
 void labelnum(long num)
