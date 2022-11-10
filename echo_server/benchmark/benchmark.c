@@ -26,7 +26,7 @@
 
 pid_t my_pid = BENCH_PID;
 
-uintptr_t uart_base;
+// uintptr_t uart_base;
 uintptr_t cyclecounters_vaddr;
 uintptr_t instructionCount_vaddr;
 

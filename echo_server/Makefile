@@ -93,7 +93,10 @@ CORE4FILES=$(LWIPDIR)/core/ipv4/autoip.c \
 # NETIFFILES: Files implementing various generic network interface functions
 NETIFFILES=$(LWIPDIR)/netif/ethernet.c
 
-SHARED_OBJS := $(SEL4CPRUNTIME)/syscall_time.o $(SEL4CPRUNTIME)/syscall_implementation.o $(SEL4CPRUNTIME)/sel4cp_runtime.o
+STDLIB_OBJS := $(SEL4CPRUNTIME)/syscall_time.o \
+	$(SEL4CPRUNTIME)/syscall_implementation.o \
+	$(SEL4CPRUNTIME)/sel4cp_runtime.o \
+	$(SEL4CPRUNTIME)/syscall_uart.o \
 
 # LWIPFILES: All the above.
 LWIPFILES=lwip.c $(COREFILES) $(CORE4FILES) $(NETIFFILES)
@@ -103,14 +106,14 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 				utilization_socket.o \
 				udp_echo_socket.o timer.o \
 				websrv_socket.o \
-				$(SHARED_OBJS)
+				$(STDLIB_OBJS)
 
 
-ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o $(SHARED_OBJS)
-BENCH_OBJS := benchmark/benchmark.o $(SHARED_OBJS)
-IDLE_OBJS := benchmark/idle.o $(SHARED_OBJS)
-WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o $(SHARED_OBJS)
-NFS_OBJS := nfs.o $(SHARED_OBJS)
+ETH_OBJS := eth.o libsharedringbuffer/shared_ringbuffer.o $(STDLIB_OBJS)
+BENCH_OBJS := benchmark/benchmark.o $(STDLIB_OBJS)
+IDLE_OBJS := benchmark/idle.o $(STDLIB_OBJS)
+WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o $(STDLIB_OBJS)
+NFS_OBJS := nfs.o $(STDLIB_OBJS)
 
 all: directories $(IMAGE_FILE) sel4cp_runtime/lib/crt0.o
 

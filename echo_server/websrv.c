@@ -23,8 +23,6 @@
 
 pid_t my_pid = WEBSRV_PID;
 
-uint64_t uart_base;
-
 uintptr_t rx_websrv_avail;
 uintptr_t rx_websrv_used;
 uintptr_t tx_websrv_avail;

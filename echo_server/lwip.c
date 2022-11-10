@@ -42,7 +42,7 @@ uintptr_t tx_avail;
 uintptr_t tx_used;
 uintptr_t copy_rx;
 uintptr_t shared_dma_vaddr;
-uintptr_t uart_base;
+// uintptr_t uart_base;
 
 uintptr_t shared_websrv_lwip_vaddr;
 uintptr_t rx_websrv_avail;

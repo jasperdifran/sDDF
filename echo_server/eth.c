@@ -30,7 +30,7 @@ uintptr_t rx_avail;
 uintptr_t rx_used;
 uintptr_t tx_avail;
 uintptr_t tx_used;
-uintptr_t uart_base;
+// uintptr_t uart_base;
 
 /* Make the minimum frame buffer 2k. This is a bit of a waste of memory, but ensures alignment */
 #define PACKET_BUFFER_SIZE 2048

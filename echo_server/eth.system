@@ -96,6 +96,7 @@
         <map mr="instructionCount" vaddr="0x3_000_000" perms="rw" cached="true" setvar_vaddr="instructionCount_vaddr" />
         <map mr="cyclecounters" vaddr="0x5_010_000" perms="rw" cached="true" setvar_vaddr="cyclecounters_vaddr" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
     </protection_domain>
 
     <protection_domain name="bench" priority="102">
@@ -124,6 +125,7 @@
     <protection_domain name="nfs" priority="104">
         <program_image path="nfs.elf" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
+        <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
     </protection_domain>
 
     <channel>
