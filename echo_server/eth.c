@@ -203,6 +203,28 @@ static void fill_rx_bufs()
     }
 }
 
+void char_to_hex(char c, char *buf)
+{
+    char *hex = "0123456789ABCDEF";
+    buf[0] = hex[(c >> 4) & 0xF];
+    buf[1] = hex[c & 0xF];
+}
+
+void print_buf(uintptr_t buf)
+{
+    sel4cp_dbg_puts("Buffer: ");
+    for (int i = 0; i < 2048; i++)
+    {
+        char c = ((char *)buf)[i];
+        char hex[2];
+        char_to_hex(c, hex);
+        sel4cp_dbg_putc(hex[0]);
+        sel4cp_dbg_putc(hex[1]);
+        sel4cp_dbg_putc(' ');
+    }
+    sel4cp_dbg_puts("\n");
+}
+
 static void
 handle_rx(volatile struct enet_regs *eth)
 {

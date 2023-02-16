@@ -30,17 +30,28 @@ uintptr_t tx_websrv_used;
 
 uintptr_t shared_websrv_lwip_vaddr;
 
-ring_handle_t rx_ring;
-ring_handle_t tx_ring;
+uintptr_t rx_nfs_websrv_avail;
+uintptr_t rx_nfs_websrv_used;
+uintptr_t tx_nfs_websrv_avail;
+uintptr_t tx_nfs_websrv_used;
+
+uintptr_t shared_nfs_websrv_vaddr;
+
+ring_handle_t lwip_rx_ring;
+ring_handle_t lwip_tx_ring;
+ring_handle_t nfs_rx_ring;
+ring_handle_t nfs_tx_ring;
 char tx_data[BUF_SIZE * 256] = {0};
 unsigned int tx_len;
 
 void init(void)
 {
     syscalls_init();
-    ring_init(&rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 0);
-    ring_init(&tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 0);
+    ring_init(&lwip_rx_ring, (ring_buffer_t *)rx_websrv_avail, (ring_buffer_t *)rx_websrv_used, NULL, 0);
+    ring_init(&lwip_tx_ring, (ring_buffer_t *)tx_websrv_avail, (ring_buffer_t *)tx_websrv_used, NULL, 0);
     init_websrv();
+    ring_init(&nfs_rx_ring, (ring_buffer_t *)rx_nfs_websrv_avail, (ring_buffer_t *)rx_nfs_websrv_used, NULL, 0);
+    ring_init(&nfs_tx_ring, (ring_buffer_t *)tx_nfs_websrv_avail, (ring_buffer_t *)tx_nfs_websrv_used, NULL, 0);
     sel4cp_dbg_puts("Init websrv pd\n");
 }
 
@@ -90,16 +101,16 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         uintptr_t tx_buf;
         unsigned int temp_len;
 
-        if (ring_empty(tx_ring.avail_ring))
+        if (ring_empty(lwip_tx_ring.avail_ring))
         {
-            // sel4cp_dbg_puts("tx_ring.avail_ring is empty");
+            // sel4cp_dbg_puts("lwip_tx_ring.avail_ring is empty");
             sel4cp_notify(LWIP_CH);
         }
-        // while (ring_empty(&tx_ring));
-        int error = dequeue_avail(&tx_ring, &tx_buf, &temp_len, &tx_cookie);
+        // while (ring_empty(&lwip_tx_ring));
+        int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
         {
-            sel4cp_dbg_puts("Failed to dequeue avail from tx_ring\n");
+            sel4cp_dbg_puts("Failed to dequeue avail from lwip_tx_ring\n");
             return;
         }
 
@@ -110,7 +121,7 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         }
         bytes_written += bytes_to_write;
 
-        enqueue_used(&tx_ring, tx_buf, bytes_to_write, cookie);
+        enqueue_used(&lwip_tx_ring, tx_buf, bytes_to_write, cookie);
     }
 }
 
@@ -128,37 +139,34 @@ void notified(sel4cp_channel ch)
     {
     case LWIP_CH:;
         /* Get request packet from lwip */
-        while (!ring_empty(rx_ring.used_ring))
+        while (!ring_empty(lwip_rx_ring.used_ring))
         {
             uintptr_t rx_buf;
             void *rx_cookie;
             unsigned int rx_len;
 
-            int error = dequeue_used(&rx_ring, &rx_buf, &rx_len, &rx_cookie);
+            int error = dequeue_used(&lwip_rx_ring, &rx_buf, &rx_len, &rx_cookie);
             if (error)
             {
-                sel4cp_dbg_puts("Failed to dequeue used from rx_ring\n");
+                sel4cp_dbg_puts("Failed to dequeue used from lwip_rx_ring\n");
                 return;
             }
 
             /* Init a response buf and process request */
             tx_len = 0;
-            // sel4cp_dbg_puts("Websrv got rx\n---\n");
-            // sel4cp_dbg_puts((char *)rx_buf);
-            // sel4cp_dbg_puts("\n---\n");
             run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
 
             /* Copy response buf to ring buf */
             copy_mpybuf_to_ringbuf(rx_cookie);
 
             /* Release req buf */
-            enqueue_avail(&rx_ring, rx_buf, BUF_SIZE, NULL);
+            enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, NULL);
 
             sel4cp_notify(LWIP_CH);
         }
         break;
     default:
-        sel4cp_dbg_puts("Unknown notf\n");
+        sel4cp_dbg_puts("Unknown notif\n");
         break;
     }
 }

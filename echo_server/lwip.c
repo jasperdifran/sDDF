@@ -10,6 +10,8 @@
 #include <sys/types.h>
 
 #include <syscall_implementation.h>
+#include <lwip_websrv_socket.h>
+#include <lwip_nfs_socket.h>
 
 #include "lwip/init.h"
 #include "netif/etharp.h"
@@ -23,12 +25,12 @@
 #include "shared_ringbuffer.h"
 #include "echo.h"
 #include "timer.h"
-#include "websrv_socket.h"
 
 #define IRQ 1
 #define TX_CH 2
 #define RX_CH 2
 #define INIT 4
+#define NFS_CH 8
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -49,6 +51,12 @@ uintptr_t rx_websrv_avail;
 uintptr_t rx_websrv_used;
 uintptr_t tx_websrv_avail;
 uintptr_t tx_websrv_used;
+
+uintptr_t shared_nfs_lwip_vaddr;
+uintptr_t rx_nfs_avail;
+uintptr_t rx_nfs_used;
+uintptr_t tx_nfs_avail;
+uintptr_t tx_nfs_used;
 
 pid_t my_pid = LWIP_PID;
 
@@ -88,6 +96,7 @@ typedef struct state
 } state_t;
 
 websrv_state_t websrv_state;
+nfs_state_t nfs_state;
 state_t state;
 
 /* LWIP mempool declare literally just initialises an array big enough with the correct alignment */
@@ -307,6 +316,7 @@ static err_t ethernet_init(struct netif *netif)
 
 static void netif_status_callback(struct netif *netif)
 {
+    print("netif status callback\n");
     if (dhcp_supplied_address(netif))
     {
         print("DHCP request finished, IP address for netif ");
@@ -314,7 +324,10 @@ static void netif_status_callback(struct netif *netif)
         print(" is: ");
         print(ip4addr_ntoa(netif_ip4_addr(netif)));
         print("\n");
+        // socket_connect();
     }
+    setup_tcp_socket();
+    print("netif status callback done\n");
 }
 
 static void get_mac(void)
@@ -334,15 +347,15 @@ void init_post(void)
 {
     netif_set_status_callback(&(state.netif), netif_status_callback);
     netif_set_up(&(state.netif));
+    sel4cp_dbg_puts("netif set up\n");
 
     if (dhcp_start(&(state.netif)))
     {
         sel4cp_dbg_puts("failed to start DHCP negotiation\n");
     }
 
-    setup_udp_socket();
-    setup_tcp_socket();
-    setup_utilization_socket();
+    // setup_udp_socket();
+    // setup_utilization_socket();
 
     sel4cp_dbg_puts(sel4cp_name);
     sel4cp_dbg_puts(": init complete -- waiting for notification\n");
@@ -400,6 +413,20 @@ void init(void)
         enqueue_avail(&websrv_state.tx_ring, shared_websrv_lwip_vaddr + (BUF_SIZE * (i + NUM_BUFFERS)), BUF_SIZE, NULL);
     }
 
+    /* Setup shared memory regions for nfs rings */
+    ring_init(&nfs_state.rx_ring, (ring_buffer_t *)rx_nfs_avail, (ring_buffer_t *)rx_nfs_used, NULL, 1);
+    ring_init(&nfs_state.tx_ring, (ring_buffer_t *)tx_nfs_avail, (ring_buffer_t *)tx_nfs_used, NULL, 1);
+
+    for (int i = 0; i < NUM_BUFFERS - 1; i++)
+    {
+        enqueue_avail(&nfs_state.rx_ring, shared_nfs_lwip_vaddr + (BUF_SIZE * i), BUF_SIZE, NULL);
+    }
+
+    for (int i = 0; i < NUM_BUFFERS - 1; i++)
+    {
+        enqueue_avail(&nfs_state.tx_ring, shared_nfs_lwip_vaddr + (BUF_SIZE * (i + NUM_BUFFERS)), BUF_SIZE, NULL);
+    }
+
     lwip_init();
 
     gpt_init();
@@ -427,6 +454,36 @@ void init(void)
     netif_set_default(&(state.netif));
 
     sel4cp_notify(INIT);
+}
+
+void labelnum(char *s, uint64_t n);
+
+// Array of function pointers
+static int (*socket_funcs[])(void) = {
+    create_socket,
+    bind_socket,
+    fcntl,
+    socket_connect,
+};
+
+seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
+{
+    switch (ch)
+    {
+    case NFS_CH:
+        sel4cp_dbg_puts("NFS channel sent us a something\n");
+        int syscall = sel4cp_mr_get(0);
+
+        int res = socket_funcs[syscall]();
+        labelnum("new_fd", res);
+        sel4cp_msginfo msg = sel4cp_msginfo_new(0, 1);
+        sel4cp_mr_set(0, res);
+        return msg;
+        break;
+
+    default:
+        break;
+    }
 }
 
 void notified(sel4cp_channel ch)
