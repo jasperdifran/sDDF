@@ -9,6 +9,8 @@
     <memory_region name="shared_dma" size="0x200_000" page_size="0x200_000" />
 
     <memory_region name="shared_websrv_lwip" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_nfs_lwip" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="shared_nfs_websrv" size="0x200_000" page_size="0x200_000" />
 
     <!-- shared memory for ring buffer mechanism -->
     <memory_region name="rx_avail" size="0x200_000" page_size="0x200_000"/>
@@ -19,11 +21,23 @@
     <memory_region name="rx_cookies" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_cookies" size="0x200_000" page_size="0x200_000"/>
 
-    <!-- shared memory for ring buffer mechanism -->
+    <!-- shared memory for ring buffer mechanism between lwip and websrv -->
     <memory_region name="rx_websrv_avail" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="rx_websrv_used" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_websrv_avail" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="tx_websrv_used" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for ring buffer mechanism between lwip and nfs -->
+    <memory_region name="rx_nfs_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_nfs_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_nfs_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_nfs_used" size="0x200_000" page_size="0x200_000"/>
+
+    <!-- shared memory for ring buffer mechanism between nfs and websrv -->
+    <memory_region name="rx_nfs_websrv_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="rx_nfs_websrv_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_nfs_websrv_avail" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="tx_nfs_websrv_used" size="0x200_000" page_size="0x200_000"/>
 
     <memory_region name="data_packet" size="0x1000"/>
 
@@ -59,30 +73,36 @@
         <setvar symbol="shared_dma_paddr" region_paddr="shared_dma" />
     </protection_domain>
 
-    <protection_domain name="lwip" priority="100" budget="20000">
+    <protection_domain name="lwip" priority="100" budget="20000" pp="true">
         <program_image path="lwip.elf" />
 
         <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
 
-        <!-- shared memory for ring buffer mechanism -->
+        <!-- shared memory for eth ring buffer mechanism -->
         <map mr="rx_avail" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="rx_avail" />
         <map mr="rx_used" vaddr="0x4_200_000" perms="rw" cached="true" setvar_vaddr="rx_used" />
         <map mr="tx_avail" vaddr="0x4_400_000" perms="rw" cached="true" setvar_vaddr="tx_avail" />
         <map mr="tx_used" vaddr="0x4_600_000" perms="rw" cached="true" setvar_vaddr="tx_used" />
 
         <map mr="shared_dma" vaddr="0x2_400_000" perms="rw" cached="true" setvar_vaddr="shared_dma_vaddr" />
-        <map mr="shared_websrv_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_websrv_lwip_vaddr" />
 
         <map mr="data_packet" vaddr="0x5_011_000" perms="rw" cached="true" setvar_vaddr="data_packet" />
-
 
         <!-- shared memory for websrv ring buffers -->
         <map mr="rx_websrv_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_avail" />
         <map mr="rx_websrv_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_used" />
         <map mr="tx_websrv_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_avail" />
         <map mr="tx_websrv_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_used" />
+        <map mr="shared_websrv_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_websrv_lwip_vaddr" />
+
+        <!-- shared memory for nfs ring buffers -->
+        <map mr="rx_nfs_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_avail" />
+        <map mr="rx_nfs_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_used" />
+        <map mr="tx_nfs_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_avail" />
+        <map mr="tx_nfs_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_used" />
+        <map mr="shared_nfs_lwip" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_lwip_vaddr" />
 
         <!-- shared memory used for benchmarking -->
         <map mr="cyclecounters" vaddr="0x5_010_000" perms="rw" cached="true" setvar_vaddr="cyclecounters_vaddr" />
@@ -117,15 +137,36 @@
         <map mr="rx_websrv_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_websrv_used" />
         <map mr="tx_websrv_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_avail" />
         <map mr="tx_websrv_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_websrv_used" />
-
         <map mr="shared_websrv_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_websrv_lwip_vaddr" />
+
+
+        <!-- shared memory for websrv nfs ring buffers -->
+        <map mr="rx_nfs_websrv_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
+        <map mr="rx_nfs_websrv_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
+        <map mr="tx_nfs_websrv_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
+        <map mr="tx_nfs_websrv_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
+        <map mr="shared_nfs_websrv" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
 
     </protection_domain>
 
-    <protection_domain name="nfs" priority="104">
+    <protection_domain name="nfs" priority="98">
         <program_image path="nfs.elf" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
+
+        <!-- shared memory for lwip ring buffers -->
+        <map mr="rx_nfs_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_avail" />
+        <map mr="rx_nfs_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_used" />
+        <map mr="tx_nfs_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_avail" />
+        <map mr="tx_nfs_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_used" />
+        <map mr="shared_nfs_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_lwip_vaddr" />
+
+        <!-- shared memory for nfs websrv ring buffers -->
+        <map mr="rx_nfs_websrv_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
+        <map mr="rx_nfs_websrv_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
+        <map mr="tx_nfs_websrv_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
+        <map mr="tx_nfs_websrv_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
+        <map mr="shared_nfs_websrv" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
     </protection_domain>
 
     <channel>
@@ -161,6 +202,11 @@
     <channel>
         <end pd="websrv" id="7" />
         <end pd="nfs" id="7" />
+    </channel>
+
+    <channel>
+        <end pd="nfs" id="8" />
+        <end pd="lwip" id="8" />
     </channel>
 
 </system>

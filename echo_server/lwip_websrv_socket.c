@@ -12,13 +12,14 @@
 #include <sel4cp.h>
 #include <string.h>
 
+#include <lwip_websrv_socket.h>
+
 #include "lwip/ip.h"
 #include "lwip/pbuf.h"
 #include "lwip/tcp.h"
 
 #include "echo.h"
 #include "shared_ringbuffer.h"
-#include "websrv_socket.h"
 #include "util.h"
 
 #define BUF_SIZE 2048
@@ -201,32 +202,32 @@ int setup_tcp_socket(void)
     tcp_socket = tcp_new_ip_type(IPADDR_TYPE_V4);
     if (tcp_socket == NULL)
     {
-        sel4cp_dbg_puts("Failed to open a socket for listening!");
+        sel4cp_dbg_puts("Failed to open a socket for listening!\n");
         return -1;
     }
     else
     {
-        sel4cp_dbg_puts("Opened a socket for listening!");
+        sel4cp_dbg_puts("Opened a socket for listening!\n");
     }
 
     err_t error = tcp_bind(tcp_socket, IP_ANY_TYPE, TCP_SERVER_PORT);
     if (error)
     {
-        sel4cp_dbg_puts("Failed to bind the TCP socket");
+        sel4cp_dbg_puts("Failed to bind the TCP socket\n");
         return -1;
     }
     else
     {
-        sel4cp_dbg_puts("Utilisation port bound to port 80");
+        sel4cp_dbg_puts("Utilisation port bound to port 80\n");
     }
 
     tcp_socket = tcp_listen_with_backlog_and_err(tcp_socket, 5, &error);
     if (error != ERR_OK)
     {
-        sel4cp_dbg_puts("Failed to listen on the TCP socket");
+        sel4cp_dbg_puts("Failed to listen on the TCP socket\n");
         return -1;
     }
     tcp_accept(tcp_socket, websrv_socket_accept_callback);
-
+    sel4cp_dbg_puts("Listening on port 80\n");
     return 0;
 }
