@@ -31,9 +31,7 @@
 
 #define LWIP_CH 8
 #define SEL4CP_SOCKET 0
-#define SEL4CP_BIND 1
-#define SEL4CP_FCNTL 2
-#define SEL4CP_SOCKET_CONNECT 3
+#define SEL4CP_SOCKET_CONNECT 1
 
 #define STDOUT_FD 1
 #define STDERR_FD 2
@@ -290,12 +288,13 @@ long sys_socket(va_list ap)
 
 long sys_fcntl(va_list ap)
 {
+    return;
     int fd = va_arg(ap, int);
     int cmd = va_arg(ap, int);
     int arg = va_arg(ap, int);
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
-    sel4cp_mr_set(0, SEL4CP_FCNTL);
+    sel4cp_mr_set(0, 2);
     sel4cp_mr_set(1, fd);
     sel4cp_mr_set(2, cmd);
     sel4cp_mr_set(3, arg);
@@ -308,12 +307,13 @@ long sys_fcntl(va_list ap)
 
 long sys_bind(va_list ap)
 {
+    return;
     int sockfd = va_arg(ap, int);
     const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
     socklen_t addrlen = va_arg(ap, socklen_t);
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
-    sel4cp_mr_set(0, SEL4CP_BIND);
+    sel4cp_mr_set(0, 2);
     sel4cp_mr_set(1, sockfd);
     sel4cp_mr_set(2, (seL4_Word)addr);
     sel4cp_mr_set(3, addrlen);

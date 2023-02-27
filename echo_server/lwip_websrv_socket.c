@@ -197,7 +197,7 @@ static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, er
     return ERR_OK;
 }
 
-int setup_tcp_socket(void)
+int websrv_setup_tcp_socket(void)
 {
     tcp_socket = tcp_new_ip_type(IPADDR_TYPE_V4);
     if (tcp_socket == NULL)

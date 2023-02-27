@@ -30,7 +30,7 @@
 #define TX_CH 2
 #define RX_CH 2
 #define INIT 4
-#define NFS_CH 8
+#define LWIP_NFS_CH 8
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -324,9 +324,7 @@ static void netif_status_callback(struct netif *netif)
         print(" is: ");
         print(ip4addr_ntoa(netif_ip4_addr(netif)));
         print("\n");
-        // socket_connect();
     }
-    setup_tcp_socket();
     print("netif status callback done\n");
 }
 
@@ -356,6 +354,10 @@ void init_post(void)
 
     // setup_udp_socket();
     // setup_utilization_socket();
+    sel4cp_dbg_puts("Setting up webserv TCP socket\n");
+    websrv_setup_tcp_socket();
+    sel4cp_dbg_puts("Notifying LWIP_NFS_CH for initialisation\n");
+    sel4cp_notify(LWIP_NFS_CH);
 
     sel4cp_dbg_puts(sel4cp_name);
     sel4cp_dbg_puts(": init complete -- waiting for notification\n");
@@ -461,8 +463,6 @@ void labelnum(char *s, uint64_t n);
 // Array of function pointers
 static int (*socket_funcs[])(void) = {
     create_socket,
-    bind_socket,
-    fcntl,
     socket_connect,
 };
 
@@ -470,7 +470,7 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
 {
     switch (ch)
     {
-    case NFS_CH:
+    case LWIP_NFS_CH:
         sel4cp_dbg_puts("NFS channel sent us a something\n");
         int syscall = sel4cp_mr_get(0);
 

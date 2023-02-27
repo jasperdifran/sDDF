@@ -1,5 +1,4 @@
 #include <sel4cp.h>
-// #include <sel4/sel4.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,20 +7,45 @@
 #include <nfsc/libnfs-raw.h>
 #include <sys/types.h>
 #include <syscall_implementation.h>
+#include <poll.h>
 
 #include "shared_ringbuffer.h"
 
 #include "util.h"
 
 #define WEBSRV_CH 7
-#define NFS_CH 8
+#define LWIP_NFS_CH 8
 
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
+#define SERVER "10.1.1.27"
+#define EXPORT "/VIRTUAL"
+#define NFSFILE "/BOOKS/Classics/Dracula.djvu"
+#define NFSDIR "/BOOKS/Classics/"
+
 pid_t my_pid = NFS_PID;
 
+struct client
+{
+    char server[128];
+    char export[128];
+    uint32_t mount_port;
+    struct nfsfh *nfsfh;
+    int is_finished;
+};
+
 struct rpc_context *rpc;
+struct nfs_context *nfs;
+struct client client = {
+    .server = SERVER,
+    .export = EXPORT,
+    .mount_port = 0,
+    .nfsfh = NULL,
+    .is_finished = 0,
+};
+
+struct pollfd pfds[2]; /* nfs:0  mount:1 */
 
 // struct nfs_context *nfsContext = NULL;
 
@@ -35,9 +59,16 @@ struct rpc_context *rpc;
 //     sel4cp_dbg_puts("nfs_mount_cb: nfs share mounted\n");
 // }
 
-void nfs_connect_cb(struct rpc_context *rpc, int status, void *data, void *private_data)
+void write_bright_green(const char *str)
 {
-    if (status != RPC_STATUS_SUCCESS)
+    sel4cp_dbg_puts("\033[32m");
+    sel4cp_dbg_puts(str);
+    sel4cp_dbg_puts("\033[0m");
+}
+
+void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data)
+{
+    if (err != 0)
     {
         sel4cp_dbg_puts("nfs_connect_cb: failed to connect to nfs server\n");
         return;
@@ -64,6 +95,9 @@ ring_handle_t lwip_tx_ring;
 ring_handle_t websrv_rx_ring;
 ring_handle_t websrv_tx_ring;
 
+bool nfs_init = false;
+bool nfs_socket_connected = false;
+
 void init(void)
 {
     sel4cp_dbg_puts("init: starting nfs client\n");
@@ -86,17 +120,20 @@ void init(void)
     }
 }
 
+void write_pointer_hex(void *ptr);
+
 void init_post(void)
 {
-    rpc = rpc_init_context();
+    sel4cp_dbg_puts("init_post: starting nfs client\n");
+    nfs = nfs_init_context();
 
-    if (rpc == NULL)
+    if (nfs == NULL)
     {
         sel4cp_dbg_puts("init: failed to init nfs context\n");
         return;
     }
 
-    if (rpc_connect_async(rpc, "nfshomes.keg.cse.unsw.edu.au", 2049, nfs_connect_cb, NULL) != 0)
+    if (nfs_mount_async(nfs, client.server, client.export, nfs_connect_cb, &client) != 0)
     {
         sel4cp_dbg_puts("init: failed to connect to nfs server\n");
         return;
@@ -104,21 +141,35 @@ void init_post(void)
     sel4cp_dbg_puts("init: connected to nfs server\n");
 
     sel4cp_dbg_puts("Init nfs pd\n");
+
+    write_pointer_hex(nfs_connect_cb);
 }
 
 void notified(sel4cp_channel ch)
 {
-    sel4cp_dbg_puts("NFS notified\n");
     switch (ch)
     {
+    case LWIP_NFS_CH:
+        if (!nfs_init)
+        {
+            init_post();
+            nfs_init = true;
+        }
+        else if (!nfs_socket_connected)
+        {
+            write_bright_green("NFS socket connected\n");
+            nfs_service(nfs, POLLOUT);
+            nfs_socket_connected = true;
+        }
+        else
+        {
+            write_bright_green("Processing a packet...\n");
+        }
+        break;
     case WEBSRV_CH:
         sel4cp_dbg_puts("Got notification from websrv\n");
-        // Requesting a file
-        break;
 
-    case NFS_CH:
-        sel4cp_dbg_puts("Got notification from nfs\n");
-        // Got a file
+        // Requesting a file
         break;
     default:
         sel4cp_dbg_puts("Got notification from unknown channel\n");
