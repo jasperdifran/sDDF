@@ -163,7 +163,7 @@ long sys_mmap(va_list ap)
         morecore_top -= length;
         return morecore_top;
     }
-    sel4cp_dbg_puts("not implemented");
+    sel4cp_dbg_puts("sys_mmap not implemented");
     return -ENOMEM;
 }
 
@@ -326,7 +326,13 @@ long sys_bind(va_list ap)
 
 long sys_setsockopt(va_list ap)
 {
-    sel4cp_dbg_puts("setsockopt not implemented");
+    sel4cp_dbg_puts("setsockopt not implemented\n");
+    return 0;
+}
+
+long sys_getsockopt(va_list ap)
+{
+    sel4cp_dbg_puts("getsockopt not implemented\n");
     return 0;
 }
 
@@ -339,6 +345,18 @@ long sys_socket_connect(va_list ap)
     int val = sel4cp_mr_get(0);
     labelnum("socket_connect: ", val);
     return (long)val;
+}
+
+long sys_getuid(va_list ap)
+{
+    (void)ap;
+    return 1;
+}
+
+long sys_getgid(va_list ap)
+{
+    (void)ap;
+    return 1;
 }
 
 void syscalls_init(void)
@@ -360,6 +378,10 @@ void syscalls_init(void)
     syscall_table[__NR_fcntl] = (muslcsys_syscall_t)sys_fcntl;
     syscall_table[__NR_bind] = (muslcsys_syscall_t)sys_bind;
     syscall_table[__NR_connect] = (muslcsys_syscall_t)sys_socket_connect;
+    syscall_table[__NR_getuid] = (muslcsys_syscall_t)sys_getuid;
+    syscall_table[__NR_getgid] = (muslcsys_syscall_t)sys_getgid;
+    syscall_table[__NR_setsockopt] = (muslcsys_syscall_t)sys_setsockopt;
+    syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_setsockopt;
 }
 
 void debug_error(long num)
@@ -377,7 +399,6 @@ int pthread_setcancelstate(int state, int *oldstate)
 
 long sel4_vsyscall(long sysnum, ...)
 {
-    labelnum("\% Sysnum", sysnum);
     va_list al;
     va_start(al, sysnum);
     muslcsys_syscall_t syscall;
@@ -399,6 +420,5 @@ long sel4_vsyscall(long sysnum, ...)
     /* Call it */
     long ret = syscall(al);
     va_end(al);
-    sel4cp_dbg_puts("\% Done syscall\n");
     return ret;
 }
