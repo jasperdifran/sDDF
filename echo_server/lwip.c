@@ -31,6 +31,7 @@
 #define RX_CH 2
 #define INIT 4
 #define LWIP_NFS_CH 8
+#define TIMER_CH 9
 
 #define LINK_SPEED 1000000000 // Gigabit
 #define ETHER_MTU 1500
@@ -431,7 +432,7 @@ void init(void)
 
     lwip_init();
 
-    gpt_init();
+    // gpt_init();
 
     LWIP_MEMPOOL_INIT(RX_POOL);
 
@@ -496,13 +497,16 @@ void notified(sel4cp_channel ch)
     case INIT:
         init_post();
         return;
-    case IRQ:
-        /* Timer */
-        irq(ch);
-        sel4cp_irq_ack(ch);
-        return;
+    // case IRQ:
+    //     /* Timer */
+    //     irq(ch);
+    //     sel4cp_irq_ack(ch);
+    //     return;
     case WEBSRV_CH:
         websrv_socket_send_response();
+        return;
+    case TIMER_CH:
+        sys_check_timeouts();
         return;
     default:
         sel4cp_dbg_puts("lwip: received notification on unexpected channel\n");

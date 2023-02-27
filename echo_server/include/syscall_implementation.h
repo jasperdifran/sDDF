@@ -8,6 +8,7 @@
 #define LWIP_PID 4
 #define IDLE_PID 5
 #define BENCH_PID 6
+#define TIMER_PID 7
 
 extern void *__sysinfo;
 

@@ -15,6 +15,7 @@
 
 #define WEBSRV_CH 7
 #define LWIP_NFS_CH 8
+#define TIMER_CH 10
 
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
@@ -168,8 +169,10 @@ void notified(sel4cp_channel ch)
         break;
     case WEBSRV_CH:
         sel4cp_dbg_puts("Got notification from websrv\n");
-
         // Requesting a file
+        break;
+    case TIMER_CH:
+        nfs_service(nfs, 0);
         break;
     default:
         sel4cp_dbg_puts("Got notification from unknown channel\n");

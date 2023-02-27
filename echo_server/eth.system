@@ -73,10 +73,17 @@
         <setvar symbol="shared_dma_paddr" region_paddr="shared_dma" />
     </protection_domain>
 
+    <protection_domain name="timer" priority="112" pp="true">
+        <program_image path="timer.elf" />
+        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+
+        <irq irq="87" id="1" /> <!-- timer interrupt -->
+    </protection_domain>
+
     <protection_domain name="lwip" priority="100" budget="20000" pp="true">
         <program_image path="lwip.elf" />
 
-        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+        <!-- <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" /> -->
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
 
@@ -107,7 +114,8 @@
         <!-- shared memory used for benchmarking -->
         <map mr="cyclecounters" vaddr="0x5_010_000" perms="rw" cached="true" setvar_vaddr="cyclecounters_vaddr" />
 
-        <irq irq="87" id="1" /> <!-- timer interrupt -->
+        <!-- timer interrupt 
+        <irq irq="87" id="1" />  -->
     </protection_domain>
 
     <protection_domain name="benchIdle" priority="1">
@@ -207,6 +215,16 @@
     <channel>
         <end pd="nfs" id="8" />
         <end pd="lwip" id="8" />
+    </channel>
+
+    <channel>
+        <end pd="lwip" id="9" />
+        <end pd="timer" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="nfs" id="10" />
+        <end pd="timer" id="3" />
     </channel>
 
 </system>
