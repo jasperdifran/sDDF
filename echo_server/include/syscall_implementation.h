@@ -13,3 +13,6 @@
 extern void *__sysinfo;
 
 void syscalls_init(void);
+
+typedef void (*socket_send)(void *buf, size_t len);
+typedef size_t (*socket_recv)(void *buf, size_t len);

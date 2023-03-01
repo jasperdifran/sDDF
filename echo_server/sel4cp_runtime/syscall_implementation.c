@@ -41,6 +41,14 @@ typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
 extern pid_t my_pid;
+socket_send nfs_send_to_lwip = NULL;
+socket_recv nfs_recv_from_lwip = NULL;
+
+// {
+//     sel4cp_dbg_puts("\033[36m");
+//     sel4cp_dbg_puts(str);
+//     sel4cp_dbg_puts("\033[0m");
+// }
 
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 
@@ -359,6 +367,49 @@ long sys_getgid(va_list ap)
     return 1;
 }
 
+// void nfs_send_to_lwip(void *buf, size_t len)
+// {
+//     return;
+// }
+
+long sys_sendto(va_list ap)
+{
+    int sockfd = va_arg(ap, int);
+    const void *buf = va_arg(ap, const void *);
+    size_t len = va_arg(ap, size_t);
+    int flags = va_arg(ap, int);
+
+    sel4cp_dbg_puts("Trying to send to nfs\n");
+    if (nfs_send_to_lwip != NULL)
+    {
+        nfs_send_to_lwip(buf, len);
+    }
+
+    return (long)len;
+}
+
+long sys_recvfrom(va_list ap)
+{
+    int sockfd = va_arg(ap, int);
+    void *buf = va_arg(ap, void *);
+    size_t len = va_arg(ap, size_t);
+    int flags = va_arg(ap, int);
+    struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
+    socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    sel4cp_dbg_puts("Trying to recv from nfs\n");
+    size_t read = 0;
+    if (nfs_recv_from_lwip != NULL)
+    {
+        read = nfs_recv_from_lwip(buf, len);
+    }
+
+    labelnum("recvfrom bytes read: ", read);
+    labelnum("recvfrom len: ", len);
+
+    return (long)read;
+}
+
 void syscalls_init(void)
 {
     /* Timer init */
@@ -382,6 +433,8 @@ void syscalls_init(void)
     syscall_table[__NR_getgid] = (muslcsys_syscall_t)sys_getgid;
     syscall_table[__NR_setsockopt] = (muslcsys_syscall_t)sys_setsockopt;
     syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_setsockopt;
+    syscall_table[__NR_sendto] = (muslcsys_syscall_t)sys_sendto;
+    syscall_table[__NR_recvfrom] = (muslcsys_syscall_t)sys_recvfrom;
 }
 
 void debug_error(long num)
