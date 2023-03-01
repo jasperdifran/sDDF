@@ -487,6 +487,13 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
     }
 }
 
+void write_red(char *s)
+{
+    sel4cp_dbg_puts("\033[31m");
+    sel4cp_dbg_puts(s);
+    sel4cp_dbg_puts("\033[0m");
+}
+
 void notified(sel4cp_channel ch)
 {
     switch (ch)
@@ -497,16 +504,16 @@ void notified(sel4cp_channel ch)
     case INIT:
         init_post();
         return;
-    // case IRQ:
-    //     /* Timer */
-    //     irq(ch);
-    //     sel4cp_irq_ack(ch);
-    //     return;
     case WEBSRV_CH:
         websrv_socket_send_response();
         return;
     case TIMER_CH:
+        write_red("Timer fired\n");
         sys_check_timeouts();
+        return;
+    case LWIP_NFS_CH:
+        write_red("NFS channel notified us\n");
+        nfs_socket_process_tx();
         return;
     default:
         sel4cp_dbg_puts("lwip: received notification on unexpected channel\n");
