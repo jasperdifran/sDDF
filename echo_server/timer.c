@@ -35,15 +35,16 @@ static uint32_t overflow_count;
 #define ICR2 8
 #define CNT 9
 
-#define TICK_MS 10
-#define NS_IN_MS 1000000ULL
+// Want the timer to tick every 200ms
+#define TICK_MS 200
+#define NS_IN_MS 1000ULL
 
 pid_t my_pid = LWIP_PID;
 
 int timers_initialised = 0;
 
-int nfs_timeout_counter = 0;
-int nfs_timeout_goal = 10;
+int lwip_timeout_counter = 0;
+int lwip_timeout_goal = 3;
 
 void write_bright_green(const char *str)
 {
@@ -100,14 +101,13 @@ void handle_irq(void)
         gpt[OCR1] = abs_timeout;
         gpt[IR] |= 1;
         // sys_check_timeouts();
-        sel4cp_notify(LWIP_CH);
-        if (nfs_timeout_counter++ == nfs_timeout_goal)
+        sel4cp_notify(NFS_CH);
+        if (lwip_timeout_counter++ == lwip_timeout_goal)
         {
-            nfs_timeout_counter = 0;
-            sel4cp_notify(NFS_CH);
+            lwip_timeout_counter = 0;
+            sel4cp_notify(LWIP_CH);
         }
     }
-    write_bright_green("IRQ");
 }
 
 void gpt_init(void)
