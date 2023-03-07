@@ -325,6 +325,7 @@ static void netif_status_callback(struct netif *netif)
         print(" is: ");
         print(ip4addr_ntoa(netif_ip4_addr(netif)));
         print("\n");
+        // socket_connect();
     }
     print("netif status callback done\n");
 }

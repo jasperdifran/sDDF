@@ -11,6 +11,8 @@
 
 #include "shared_ringbuffer.h"
 
+#include "shared_ringbuffer.h"
+
 #include "util.h"
 
 #define MIN(a, b) (a < b) ? a : b
@@ -397,6 +399,25 @@ void notified(sel4cp_channel ch)
         break;
     }
 }
+
+uintptr_t rx_nfs_avail;
+uintptr_t rx_nfs_used;
+uintptr_t tx_nfs_avail;
+uintptr_t tx_nfs_used;
+
+uintptr_t shared_nfs_lwip_vaddr;
+
+uintptr_t rx_nfs_websrv_avail;
+uintptr_t rx_nfs_websrv_used;
+uintptr_t tx_nfs_websrv_avail;
+uintptr_t tx_nfs_websrv_used;
+
+uintptr_t shared_nfs_websrv_vaddr;
+
+ring_handle_t lwip_rx_ring;
+ring_handle_t lwip_tx_ring;
+ring_handle_t websrv_rx_ring;
+ring_handle_t websrv_tx_ring;
 
 void init(void)
 {
