@@ -487,13 +487,6 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
     }
 }
 
-void write_red(char *s)
-{
-    sel4cp_dbg_puts("\033[31m");
-    sel4cp_dbg_puts(s);
-    sel4cp_dbg_puts("\033[0m");
-}
-
 void notified(sel4cp_channel ch)
 {
     switch (ch)
@@ -508,7 +501,6 @@ void notified(sel4cp_channel ch)
         websrv_socket_send_response();
         return;
     case TIMER_CH:
-        write_red("Timer fired\n");
         sys_check_timeouts();
         return;
     case LWIP_NFS_CH:
