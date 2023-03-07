@@ -85,8 +85,6 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
 
     pbuf_copy_partial(p, (void *)data, p->tot_len, 0);
 
-    print_bright_green_buf(data, p->tot_len);
-
     cookie = (void *)tpcb;
 
     enqueue_used(&nfs_state.rx_ring, data, p->tot_len, cookie);
