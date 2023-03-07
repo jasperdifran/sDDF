@@ -75,6 +75,7 @@ void write_bright_green(const char *str)
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data)
 {
+    sel4cp_dbg_puts((char *)data);
     if (err != 0)
     {
         sel4cp_dbg_puts("nfs_connect_cb: failed to connect to nfs server\n");
@@ -222,8 +223,6 @@ void writenum(int num)
 static void __nfs_send_to_lwip(void *buffer, size_t len)
 {
 
-    print_bright_green_buf((uintptr_t)buffer, len);
-
     sel4cp_dbg_puts("nfs_send_to_lwip: \n");
     char *buf = (char *)buffer;
     unsigned int bytes_written = 0;
@@ -259,7 +258,6 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
             ((char *)tx_buf)[i] = buf[bytes_written + i];
         }
         bytes_written += bytes_to_write;
-        print_bright_green_buf((uintptr_t)tx_buf, len);
 
         enqueue_used(&lwip_tx_ring, tx_buf, bytes_to_write, 0);
     }
@@ -267,15 +265,28 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
     sel4cp_dbg_puts("nfs_send_to_lwip: done\n");
 }
 
+int nfs_socket_read = 0, nfs_socket_write = 0;
+char *nfs_socket_buf[BUF_SIZE];
+
 static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
 {
     labelnum("nfs_recv_from_lwip: len: ", len);
     char *buf = (char *)buffer;
     unsigned int bytes_read = 0;
 
+    // Check if we can first read leftover data
+    while (nfs_socket_read != nfs_socket_write && bytes_read < len)
+    {
+        // sel4cp_dbg_puts("nfs_recv_from_lwip: while loop\n");
+        buf[bytes_read] = nfs_socket_buf[nfs_socket_read];
+        nfs_socket_read++;
+        nfs_socket_read %= BUF_SIZE;
+        bytes_read++;
+    }
+
     while (bytes_read < len)
     {
-        sel4cp_dbg_puts("nfs_recv_from_lwip: while loop\n");
+        // sel4cp_dbg_puts("nfs_recv_from_lwip: while loop\n");
         // sel4cp_dbg_puts("Copying mpybuf to ringbuf");
         // label_num("bytes_read: ", bytes_read);
         // label_num("len: ", len);
@@ -294,6 +305,7 @@ static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
             sel4cp_dbg_puts("Failed to dequeue used from lwip_rx_ring\n");
             return 0;
         }
+
         // Copy from rx_buf to buf
         unsigned int bytes_to_read = MIN((len - bytes_read), BUF_SIZE);
         labelnum("bytes_to_read: ", bytes_to_read);
@@ -302,8 +314,27 @@ static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
             buf[bytes_read + i] = ((char *)rx_buf)[i];
         }
         bytes_read += bytes_to_read;
+
+        // More in the buffer than NFS is requesting. Fill our socket_buf with what's left
+        if (temp_len > bytes_to_read)
+        {
+            sel4cp_dbg_puts("More in the buffer than NFS is requesting. Fill our socket_buf with what's left\n");
+            labelnum("temp_len - bytes_to_read: ", temp_len - bytes_to_read);
+            for (unsigned int i = 0; i < temp_len - bytes_to_read; i++)
+            {
+                nfs_socket_buf[nfs_socket_write] = ((char *)rx_buf)[bytes_to_read + i];
+                nfs_socket_write++;
+                nfs_socket_write %= BUF_SIZE;
+            }
+            labelnum("nfs_socket_write: ", nfs_socket_write);
+            labelnum("nfs_socket_read: ", nfs_socket_read);
+        }
+
+        enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, 0);
         // print_bright_magenta_buf((uintptr_t)rx_buf, len);
     }
+
+    print_bright_magenta_buf((uintptr_t)buf, len);
     return bytes_read;
 }
 
@@ -314,16 +345,16 @@ int poll_lwip_socket(void)
 
     int ret = 0;
     int events = nfs_which_events(nfs);
-    labelnum("events: ", events);
-    if ((events & POLLOUT) && !ring_full(lwip_tx_ring.avail_ring))
+    // labelnum("events: ", events);
+    if ((events & POLLOUT) && !ring_empty(lwip_tx_ring.avail_ring))
     {
         ret |= POLLOUT;
     }
-    if ((events & POLLIN) && !ring_empty(lwip_rx_ring.used_ring))
+    if ((events & POLLIN) && (!ring_empty(lwip_rx_ring.used_ring) || nfs_socket_read != nfs_socket_write))
     {
         ret |= POLLIN;
     }
-    labelnum("ret: ", ret);
+    // labelnum("ret: ", ret);
     return ret;
 }
 
@@ -355,7 +386,10 @@ void notified(sel4cp_channel ch)
         break;
     case TIMER_CH:
         if (nfs_socket_connected)
+        {
+            write_bright_green("NFS timer ticked\n");
             nfs_service(nfs, poll_lwip_socket());
+        }
 
         break;
     default:
