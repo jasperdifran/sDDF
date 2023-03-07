@@ -16,3 +16,10 @@ void syscalls_init(void);
 
 typedef void (*socket_send)(void *buf, size_t len);
 typedef size_t (*socket_recv)(void *buf, size_t len);
+
+static inline void write_red(char *s)
+{
+    sel4cp_dbg_puts("\033[31m");
+    sel4cp_dbg_puts(s);
+    sel4cp_dbg_puts("\033[0m");
+}
