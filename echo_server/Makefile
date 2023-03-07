@@ -39,7 +39,7 @@ SEL4CPRUNTIME=sel4cp_runtime
 
 BOARD_DIR := $(SEL4CP_SDK)/board/$(SEL4CP_BOARD)/$(SEL4CP_CONFIG)
 
-IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf
+IMAGES := eth.elf lwip.elf benchmark.elf idle.elf websrv.elf nfs.elf timer.elf
 CFLAGS := -mcpu=$(CPU) -mstrict-align -ffreestanding -g3 -O3 -Wall  -Wno-unused-function
 LDFLAGS := -L$(MUSLDIR)/lib -L$(SEL4CPRUNTIME)/lib -L$(BOARD_DIR)/lib -L/host/extras/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/lib/gcc/aarch64-none-elf/10.2.1
 LIBS := -lsel4cp -Tsel4cp.ld -lc -lgcc
@@ -104,7 +104,8 @@ LWIP_OBJS := $(LWIPFILES:.c=.o) \
 				lwip.o \
 				libsharedringbuffer/shared_ringbuffer.o \
 				utilization_socket.o \
-				udp_echo_socket.o timer.o \
+				udp_echo_socket.o \
+				lwip_timer.o \
 				lwip_websrv_socket.o \
 				lwip_nfs_socket.o \
 				$(STDLIB_OBJS)
@@ -115,6 +116,7 @@ BENCH_OBJS := benchmark/benchmark.o $(STDLIB_OBJS)
 IDLE_OBJS := benchmark/idle.o $(STDLIB_OBJS)
 WEBSRV_OBJS := websrv.o libsharedringbuffer/shared_ringbuffer.o $(STDLIB_OBJS)
 NFS_OBJS := nfs.o $(STDLIB_OBJS) libsharedringbuffer/shared_ringbuffer.o
+TIMER_OBJS := timer.o $(STDLIB_OBJS)
 
 all: directories $(IMAGE_FILE) sel4cp_runtime/lib/crt0.o
 
@@ -126,6 +128,9 @@ $(BUILD_DIR)/%.o: %.c Makefile
 
 $(BUILD_DIR)/%.o: %.s Makefile
 	$(AS) -g3 -mcpu=$(CPU) $< -o $@
+
+$(BUILD_DIR)/timer.elf: $(addprefix $(BUILD_DIR)/, $(TIMER_OBJS))
+	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@
 
 $(BUILD_DIR)/websrv.elf: $(addprefix $(BUILD_DIR)/, $(WEBSRV_OBJS)) $(MICROPYDIR)/build/websrv.o
 	$(LD) $(MUSLDIR)/lib/crt1.o $(LDFLAGS) $^ $(LIBS) -o $@ 

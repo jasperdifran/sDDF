@@ -14,8 +14,4 @@ typedef struct nfs_state
 
 int create_socket(void);
 
-int fcntl(void);
-
-int bind_socket(void);
-
 int socket_connect(void);

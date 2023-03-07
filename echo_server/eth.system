@@ -73,10 +73,17 @@
         <setvar symbol="shared_dma_paddr" region_paddr="shared_dma" />
     </protection_domain>
 
+    <protection_domain name="timer" priority="112" pp="true">
+        <program_image path="timer.elf" />
+        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+
+        <irq irq="87" id="1" /> <!-- timer interrupt -->
+    </protection_domain>
+
     <protection_domain name="lwip" priority="100" budget="20000" pp="true">
         <program_image path="lwip.elf" />
 
-        <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" />
+        <!-- <map mr="timer" vaddr="0x2_000_000" perms="rw" cached="false" setvar_vaddr="gpt_regs" /> -->
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
 
@@ -107,7 +114,8 @@
         <!-- shared memory used for benchmarking -->
         <map mr="cyclecounters" vaddr="0x5_010_000" perms="rw" cached="true" setvar_vaddr="cyclecounters_vaddr" />
 
-        <irq irq="87" id="1" /> <!-- timer interrupt -->
+        <!-- timer interrupt 
+        <irq irq="87" id="1" />  -->
     </protection_domain>
 
     <protection_domain name="benchIdle" priority="1">
@@ -141,11 +149,11 @@
 
 
         <!-- shared memory for websrv nfs ring buffers -->
-        <map mr="rx_nfs_websrv_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
-        <map mr="rx_nfs_websrv_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
-        <map mr="tx_nfs_websrv_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
-        <map mr="tx_nfs_websrv_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
-        <map mr="shared_nfs_websrv" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
+        <map mr="rx_nfs_websrv_avail" vaddr="0x7_000_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
+        <map mr="rx_nfs_websrv_used" vaddr="0x7_200_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
+        <map mr="tx_nfs_websrv_avail" vaddr="0x7_400_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
+        <map mr="tx_nfs_websrv_used" vaddr="0x7_600_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
+        <map mr="shared_nfs_websrv" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
 
     </protection_domain>
 
@@ -155,18 +163,18 @@
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
 
         <!-- shared memory for lwip ring buffers -->
-        <map mr="rx_nfs_avail" vaddr="0x6_000_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_avail" />
-        <map mr="rx_nfs_used" vaddr="0x6_200_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_used" />
-        <map mr="tx_nfs_avail" vaddr="0x6_400_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_avail" />
-        <map mr="tx_nfs_used" vaddr="0x6_600_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_used" />
-        <map mr="shared_nfs_lwip" vaddr="0x5_400_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_lwip_vaddr" />
+        <map mr="rx_nfs_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_avail" />
+        <map mr="rx_nfs_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_used" />
+        <map mr="tx_nfs_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_avail" />
+        <map mr="tx_nfs_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_used" />
+        <map mr="shared_nfs_lwip" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_lwip_vaddr" />
 
         <!-- shared memory for nfs websrv ring buffers -->
-        <map mr="rx_nfs_websrv_avail" vaddr="0x6_800_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
-        <map mr="rx_nfs_websrv_used" vaddr="0x6_A00_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
-        <map mr="tx_nfs_websrv_avail" vaddr="0x6_C00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
-        <map mr="tx_nfs_websrv_used" vaddr="0x6_E00_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
-        <map mr="shared_nfs_websrv" vaddr="0x5_600_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
+        <map mr="rx_nfs_websrv_avail" vaddr="0x7_000_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_avail" />
+        <map mr="rx_nfs_websrv_used" vaddr="0x7_200_000" perms="rw" cached="true" setvar_vaddr="rx_nfs_websrv_used" />
+        <map mr="tx_nfs_websrv_avail" vaddr="0x7_400_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_avail" />
+        <map mr="tx_nfs_websrv_used" vaddr="0x7_600_000" perms="rw" cached="true" setvar_vaddr="tx_nfs_websrv_used" />
+        <map mr="shared_nfs_websrv" vaddr="0x7_800_000" perms="rw" cached="true" setvar_vaddr="shared_nfs_websrv_vaddr" />
     </protection_domain>
 
     <channel>
@@ -207,6 +215,16 @@
     <channel>
         <end pd="nfs" id="8" />
         <end pd="lwip" id="8" />
+    </channel>
+
+    <channel>
+        <end pd="lwip" id="9" />
+        <end pd="timer" id="2" />
+    </channel>
+
+    <channel>
+        <end pd="nfs" id="10" />
+        <end pd="timer" id="3" />
     </channel>
 
 </system>

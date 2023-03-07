@@ -31,9 +31,7 @@
 
 #define LWIP_CH 8
 #define SEL4CP_SOCKET 0
-#define SEL4CP_BIND 1
-#define SEL4CP_FCNTL 2
-#define SEL4CP_SOCKET_CONNECT 3
+#define SEL4CP_SOCKET_CONNECT 1
 
 #define STDOUT_FD 1
 #define STDERR_FD 2
@@ -43,6 +41,14 @@ typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
 extern pid_t my_pid;
+socket_send nfs_send_to_lwip = NULL;
+socket_recv nfs_recv_from_lwip = NULL;
+
+// {
+//     sel4cp_dbg_puts("\033[36m");
+//     sel4cp_dbg_puts(str);
+//     sel4cp_dbg_puts("\033[0m");
+// }
 
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 
@@ -122,6 +128,7 @@ long sys_brk(va_list ap)
 
     uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
+    labelnum_red("sys_brk newbrk: ", newbrk);
 
     /*if the newbrk is 0, return the bottom of the heap*/
     if (!newbrk)
@@ -134,10 +141,116 @@ long sys_brk(va_list ap)
     }
     else
     {
+        sel4cp_dbg_puts("sys_brk failed");
         ret = 0;
     }
 
+    labelnum_red("sys_brk ret: ", ret);
+
     return ret;
+}
+
+void write_red(char *s);
+
+void labelnum_red(char *s, uint64_t n)
+{
+    sel4cp_dbg_puts("\033[31m");
+    sel4cp_dbg_puts(s);
+    sel4cp_dbg_puts(": ");
+    print_num(n);
+    sel4cp_dbg_puts("\033[0m\n");
+}
+
+void print_sys_mmap_flags(int flags)
+{
+    if (flags & MAP_SHARED)
+    {
+        flags &= ~MAP_SHARED;
+        write_red("\tMAP_SHARED\n");
+        flags &= ~MAP_SHARED;
+    }
+    if (flags & MAP_PRIVATE)
+    {
+        flags &= ~MAP_PRIVATE;
+        write_red("\tMAP_PRIVATE\n");
+    }
+    if (flags & MAP_FIXED)
+    {
+        flags &= ~MAP_FIXED;
+        write_red("\tMAP_FIXED\n");
+    }
+    if (flags & MAP_ANONYMOUS)
+    {
+        flags &= ~MAP_ANONYMOUS;
+        write_red("\tMAP_ANONYMOUS\n");
+    }
+    if (flags & MAP_GROWSDOWN)
+    {
+        flags &= ~MAP_GROWSDOWN;
+        write_red("\tMAP_GROWSDOWN\n");
+    }
+    if (flags & MAP_DENYWRITE)
+    {
+        flags &= ~MAP_DENYWRITE;
+        write_red("\tMAP_DENYWRITE\n");
+    }
+    if (flags & MAP_EXECUTABLE)
+    {
+        flags &= ~MAP_EXECUTABLE;
+        write_red("\tMAP_EXECUTABLE\n");
+    }
+    if (flags & MAP_LOCKED)
+    {
+        flags &= ~MAP_LOCKED;
+        write_red("\tMAP_LOCKED\n");
+    }
+    if (flags & MAP_NORESERVE)
+    {
+        flags &= ~MAP_NORESERVE;
+        write_red("\tMAP_NORESERVE\n");
+    }
+    if (flags & MAP_POPULATE)
+    {
+        flags &= ~MAP_POPULATE;
+        write_red("\tMAP_POPULATE\n");
+    }
+    if (flags & MAP_NONBLOCK)
+    {
+        flags &= ~MAP_NONBLOCK;
+        write_red("\tMAP_NONBLOCK\n");
+    }
+    if (flags & MAP_STACK)
+    {
+        flags &= ~MAP_STACK;
+        write_red("\tMAP_STACK\n");
+    }
+    if (flags & MAP_HUGETLB)
+    {
+        flags &= ~MAP_HUGETLB;
+        write_red("\tMAP_HUGETLB\n");
+    }
+    // if (flags & MAP_SYNC) {
+    //     write_red("\tMAP_SYNC\n");
+    // }
+    if (flags & MAP_FIXED_NOREPLACE)
+    {
+        flags &= ~MAP_FIXED_NOREPLACE;
+        write_red("\tMAP_FIXED_NOREPLACE\n");
+    }
+    // if (flags & MAP_UNINITIALIZED) {
+    //     write_red("\tMAP_UNINITIALIZED\n");
+    // }
+    if (flags)
+    {
+        write_red("\tunknown flags: ");
+        print_num(flags);
+        write_red("\t\n");
+    }
+}
+
+uintptr_t align_addr(uintptr_t addr)
+{
+    return (addr + 0xfff) & ~0xfff;
 }
 
 long sys_mmap(va_list ap)
@@ -151,19 +264,51 @@ long sys_mmap(va_list ap)
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
     (void)fd, (void)offset, (void)prot, (void)addr;
+    // labelnum_red("sys_mmap addr: ", addr);
+    // labelnum_red("sys_mmap length: ", length);
+    // labelnum_red("sys_mmap prot: ", prot);
+    // labelnum_red("sys_mmap flags: ", flags);
+    // print_sys_mmap_flags(flags);
+    // labelnum_red("sys_mmap fd: ", fd);
+    // labelnum_red("sys_mmap offset: ", offset);
+    // labelnum_red("sys_mmap morecore_top: ", morecore_top);
+    // labelnum_red("sys_mmap morecore_base: ", morecore_base);
 
     if (flags & MAP_ANONYMOUS)
     {
         /* Check that we don't try and allocate more than exists */
         if (length > morecore_top - morecore_base)
         {
+            write_red("sys_mmap MAP_ANONYMOUS out of mem\n");
             return -ENOMEM;
         }
-        /* Steal from the top */
-        morecore_top -= length;
-        return morecore_top;
+
+        // if (flags & MAP_FIXED)
+        // {
+        //     /* Fixed allocation */
+        //     // if (addr < morecore_base || addr + length > morecore_top)
+        //     // {
+        //     //     write_red("sys_mmap MAP_FIXED out of mem\n");
+        //     //     return -ENOMEM;
+        //     // }
+        //     return align_addr(addr);
+        // }
+        // else if (flags & MAP_GROWSDOWN)
+        // {
+        //     /* Allocate from the bottom */
+        //     void *ret = morecore_base;
+        //     morecore_base += length;
+        //     return ret;
+        // }
+        // else
+        {
+            /* Steal from the top */
+            // morecore_top -= length;
+            morecore_top = align_addr(morecore_top - length);
+            return morecore_top;
+        }
     }
-    sel4cp_dbg_puts("not implemented");
+    sel4cp_dbg_puts("sys_mmap out of mem\n");
     return -ENOMEM;
 }
 
@@ -290,12 +435,13 @@ long sys_socket(va_list ap)
 
 long sys_fcntl(va_list ap)
 {
+    return;
     int fd = va_arg(ap, int);
     int cmd = va_arg(ap, int);
     int arg = va_arg(ap, int);
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
-    sel4cp_mr_set(0, SEL4CP_FCNTL);
+    sel4cp_mr_set(0, 2);
     sel4cp_mr_set(1, fd);
     sel4cp_mr_set(2, cmd);
     sel4cp_mr_set(3, arg);
@@ -308,12 +454,13 @@ long sys_fcntl(va_list ap)
 
 long sys_bind(va_list ap)
 {
+    return;
     int sockfd = va_arg(ap, int);
     const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
     socklen_t addrlen = va_arg(ap, socklen_t);
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
-    sel4cp_mr_set(0, SEL4CP_BIND);
+    sel4cp_mr_set(0, 2);
     sel4cp_mr_set(1, sockfd);
     sel4cp_mr_set(2, (seL4_Word)addr);
     sel4cp_mr_set(3, addrlen);
@@ -326,7 +473,13 @@ long sys_bind(va_list ap)
 
 long sys_setsockopt(va_list ap)
 {
-    sel4cp_dbg_puts("setsockopt not implemented");
+    sel4cp_dbg_puts("setsockopt not implemented\n");
+    return 0;
+}
+
+long sys_getsockopt(va_list ap)
+{
+    sel4cp_dbg_puts("getsockopt not implemented\n");
     return 0;
 }
 
@@ -339,6 +492,102 @@ long sys_socket_connect(va_list ap)
     int val = sel4cp_mr_get(0);
     labelnum("socket_connect: ", val);
     return (long)val;
+}
+
+long sys_getuid(va_list ap)
+{
+    (void)ap;
+    return 1;
+}
+
+long sys_getgid(va_list ap)
+{
+    (void)ap;
+    return 1;
+}
+
+// void nfs_send_to_lwip(void *buf, size_t len)
+// {
+//     return;
+// }
+
+long sys_sendto(va_list ap)
+{
+    int sockfd = va_arg(ap, int);
+    const void *buf = va_arg(ap, const void *);
+    size_t len = va_arg(ap, size_t);
+    int flags = va_arg(ap, int);
+
+    sel4cp_dbg_puts("Trying to send to nfs\n");
+    if (nfs_send_to_lwip != NULL)
+    {
+        nfs_send_to_lwip(buf, len);
+    }
+
+    return (long)len;
+}
+
+long sys_recvfrom(va_list ap)
+{
+    int sockfd = va_arg(ap, int);
+    void *buf = va_arg(ap, void *);
+    size_t len = va_arg(ap, size_t);
+    int flags = va_arg(ap, int);
+    struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
+    socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    sel4cp_dbg_puts("Trying to recv from nfs\n");
+    size_t read = 0;
+    if (nfs_recv_from_lwip != NULL)
+    {
+        read = nfs_recv_from_lwip(buf, len);
+    }
+
+    labelnum("recvfrom bytes read: ", read);
+    labelnum("recvfrom len: ", len);
+
+    return (long)read;
+}
+
+void debug_error(long num)
+{
+    labelnum("Error doing syscall: ", num);
+    sel4cp_dbg_puts("\n");
+}
+
+int pthread_setcancelstate(int state, int *oldstate)
+{
+    (void)state;
+    (void)oldstate;
+    return 0;
+}
+
+long sel4_vsyscall(long sysnum, ...)
+{
+    va_list al;
+    va_start(al, sysnum);
+    muslcsys_syscall_t syscall;
+
+    labelnum("syscall: ", sysnum);
+    if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table))
+    {
+        // debug_error(sysnum);
+        return -ENOSYS;
+    }
+    else
+    {
+        syscall = syscall_table[sysnum];
+    }
+    /* Check a syscall is implemented there */
+    if (!syscall)
+    {
+        debug_error(sysnum);
+        return -ENOSYS;
+    }
+    /* Call it */
+    long ret = syscall(al);
+    va_end(al);
+    return ret;
 }
 
 void syscalls_init(void)
@@ -360,45 +609,10 @@ void syscalls_init(void)
     syscall_table[__NR_fcntl] = (muslcsys_syscall_t)sys_fcntl;
     syscall_table[__NR_bind] = (muslcsys_syscall_t)sys_bind;
     syscall_table[__NR_connect] = (muslcsys_syscall_t)sys_socket_connect;
-}
-
-void debug_error(long num)
-{
-    labelnum("Error doing syscall: ", num);
-    sel4cp_dbg_puts("\n");
-}
-
-int pthread_setcancelstate(int state, int *oldstate)
-{
-    (void)state;
-    (void)oldstate;
-    return 0;
-}
-
-long sel4_vsyscall(long sysnum, ...)
-{
-    labelnum("\% Sysnum", sysnum);
-    va_list al;
-    va_start(al, sysnum);
-    muslcsys_syscall_t syscall;
-    if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table))
-    {
-        // debug_error(sysnum);
-        return -ENOSYS;
-    }
-    else
-    {
-        syscall = syscall_table[sysnum];
-    }
-    /* Check a syscall is implemented there */
-    if (!syscall)
-    {
-        debug_error(sysnum);
-        return -ENOSYS;
-    }
-    /* Call it */
-    long ret = syscall(al);
-    va_end(al);
-    sel4cp_dbg_puts("\% Done syscall\n");
-    return ret;
+    syscall_table[__NR_getuid] = (muslcsys_syscall_t)sys_getuid;
+    syscall_table[__NR_getgid] = (muslcsys_syscall_t)sys_getgid;
+    syscall_table[__NR_setsockopt] = (muslcsys_syscall_t)sys_setsockopt;
+    syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_setsockopt;
+    syscall_table[__NR_sendto] = (muslcsys_syscall_t)sys_sendto;
+    syscall_table[__NR_recvfrom] = (muslcsys_syscall_t)sys_recvfrom;
 }
