@@ -27,13 +27,14 @@
 #define BUF_SIZE 2048
 
 #define SERVER "10.1.1.27"
-#define EXPORT "/VIRTUAL"
+#define EXPORT "/"
 #define NFSFILE "/BOOKS/Classics/Dracula.djvu"
 #define NFSDIR "/BOOKS/Classics/"
 
 pid_t my_pid = NFS_PID;
-extern socket_send nfs_send_to_lwip;
-extern socket_recv nfs_recv_from_lwip;
+extern socket_send_t nfs_send_to_lwip;
+extern socket_recv_t nfs_recv_from_lwip;
+extern socket_close_t nfs_close_lwip_sock;
 
 struct client
 {
@@ -107,8 +108,6 @@ ring_handle_t websrv_tx_ring;
 
 bool nfs_init = false;
 bool nfs_socket_connected = false;
-
-// void write_pointer_hex(void *ptr);
 
 void init_post(void)
 {
@@ -340,6 +339,11 @@ static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
     return bytes_read;
 }
 
+static size_t __nfs_close_lwip_sock()
+{
+    nfs_socket_connected = false;
+}
+
 int poll_lwip_socket(void)
 {
     if (!nfs_socket_connected)
@@ -400,25 +404,6 @@ void notified(sel4cp_channel ch)
     }
 }
 
-uintptr_t rx_nfs_avail;
-uintptr_t rx_nfs_used;
-uintptr_t tx_nfs_avail;
-uintptr_t tx_nfs_used;
-
-uintptr_t shared_nfs_lwip_vaddr;
-
-uintptr_t rx_nfs_websrv_avail;
-uintptr_t rx_nfs_websrv_used;
-uintptr_t tx_nfs_websrv_avail;
-uintptr_t tx_nfs_websrv_used;
-
-uintptr_t shared_nfs_websrv_vaddr;
-
-ring_handle_t lwip_rx_ring;
-ring_handle_t lwip_tx_ring;
-ring_handle_t websrv_rx_ring;
-ring_handle_t websrv_tx_ring;
-
 void init(void)
 {
     sel4cp_dbg_puts("init: starting nfs client\n");
@@ -426,6 +411,7 @@ void init(void)
 
     nfs_send_to_lwip = __nfs_send_to_lwip;
     nfs_recv_from_lwip = __nfs_recv_from_lwip;
+    nfs_close_lwip_sock = __nfs_close_lwip_sock;
 
     ring_init(&lwip_rx_ring, (ring_buffer_t *)rx_nfs_avail, (ring_buffer_t *)rx_nfs_used, NULL, 0);
     ring_init(&lwip_tx_ring, (ring_buffer_t *)tx_nfs_avail, (ring_buffer_t *)tx_nfs_used, NULL, 0);

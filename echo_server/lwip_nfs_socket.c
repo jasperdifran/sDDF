@@ -116,11 +116,23 @@ void err_func(void *arg, err_t err)
     labelnum("Error: ", err);
 }
 
-int socket_connect()
+int socket_connect(int port)
 {
     write_cyan("LWIP connecting nfs...\n");
 
-    nfs_socket_connect("10.13.0.11");
+    nfs_socket_connect("10.13.0.11", port);
+}
+
+int socket_close()
+{
+    write_cyan("Closing socket\n");
+    nfs_socket_close();
+}
+
+int nfs_socket_close()
+{
+    tcp_close(tcp_socket);
+    return 0;
 }
 
 int nfs_socket_create(void)
@@ -135,11 +147,12 @@ int nfs_socket_create(void)
     return 0;
 }
 
-int nfs_socket_connect(char *addr)
+int nfs_socket_connect(char *addr, int port)
 {
     ip_addr_t ipaddr;
-    int port = 111;
-    ip4_addr_set_u32(&ipaddr, ipaddr_addr("10.13.0.11"));
+    ip4_addr_set_u32(&ipaddr, ipaddr_addr(addr));
+
+    labelnum("Connecting to port: ", port);
 
     err_t error = tcp_connect(tcp_socket, &ipaddr, port, nfs_connected);
     if (error != ERR_OK)

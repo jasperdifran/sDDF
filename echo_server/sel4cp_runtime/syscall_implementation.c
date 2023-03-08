@@ -32,6 +32,7 @@
 #define LWIP_CH 8
 #define SEL4CP_SOCKET 0
 #define SEL4CP_SOCKET_CONNECT 1
+#define SEL4CP_SOCKET_CLOSE 2
 
 #define STDOUT_FD 1
 #define STDERR_FD 2
@@ -41,8 +42,9 @@ typedef long (*muslcsys_syscall_t)(va_list);
 
 extern void *__sysinfo;
 extern pid_t my_pid;
-socket_send nfs_send_to_lwip = NULL;
-socket_recv nfs_recv_from_lwip = NULL;
+socket_send_t nfs_send_to_lwip = NULL;
+socket_recv_t nfs_recv_from_lwip = NULL;
+socket_close_t nfs_close_lwip_sock = NULL;
 
 // {
 //     sel4cp_dbg_puts("\033[36m");
@@ -485,9 +487,14 @@ long sys_getsockopt(va_list ap)
 
 long sys_socket_connect(va_list ap)
 {
-    (void)ap;
-    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 1);
+    int sockfd = va_arg(ap, int);
+    const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
+    int port = addr->sa_data[0] << 8 | addr->sa_data[1];
+
+    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 2);
+    labelnum("socket_connect to port: ", port);
     sel4cp_mr_set(0, SEL4CP_SOCKET_CONNECT);
+    sel4cp_mr_set(1, port);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
     labelnum("socket_connect: ", val);
@@ -497,13 +504,13 @@ long sys_socket_connect(va_list ap)
 long sys_getuid(va_list ap)
 {
     (void)ap;
-    return 1;
+    return 510;
 }
 
 long sys_getgid(va_list ap)
 {
     (void)ap;
-    return 1;
+    return 4;
 }
 
 // void nfs_send_to_lwip(void *buf, size_t len)
@@ -590,6 +597,18 @@ long sel4_vsyscall(long sysnum, ...)
     return ret;
 }
 
+long sys_close(va_list ap)
+{
+    int fd = va_arg(ap, int);
+    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 2);
+    sel4cp_mr_set(0, SEL4CP_SOCKET_CLOSE);
+    sel4cp_mr_set(1, 0);
+    sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
+    int val = sel4cp_mr_get(0);
+    labelnum("close: ", val);
+    return (long)val;
+}
+
 void syscalls_init(void)
 {
     /* Timer init */
@@ -615,4 +634,5 @@ void syscalls_init(void)
     syscall_table[__NR_getsockopt] = (muslcsys_syscall_t)sys_setsockopt;
     syscall_table[__NR_sendto] = (muslcsys_syscall_t)sys_sendto;
     syscall_table[__NR_recvfrom] = (muslcsys_syscall_t)sys_recvfrom;
+    syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
 }
