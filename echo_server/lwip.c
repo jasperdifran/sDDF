@@ -326,6 +326,7 @@ static void netif_status_callback(struct netif *netif)
         print(ip4addr_ntoa(netif_ip4_addr(netif)));
         print("\n");
         // socket_connect();
+        sel4cp_notify(LWIP_NFS_CH);
     }
     print("netif status callback done\n");
 }
@@ -357,7 +358,6 @@ void init_post(void)
     // setup_udp_socket();
     // setup_utilization_socket();
     websrv_setup_tcp_socket();
-    sel4cp_notify(LWIP_NFS_CH);
 
     sel4cp_dbg_puts(sel4cp_name);
     sel4cp_dbg_puts(": init complete -- waiting for notification\n");
