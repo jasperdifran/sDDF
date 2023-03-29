@@ -10,6 +10,11 @@
 #define BENCH_PID 6
 #define TIMER_PID 7
 
+#define SYS_STAT64 1
+#define SYS_OPEN 2
+#define SYS_CLOSE 3
+#define SYS_READ 4
+
 extern void *__sysinfo;
 
 void syscalls_init(void);
