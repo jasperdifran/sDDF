@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <sys/time.h>
 #include <nfsc/libnfs.h>
 #include <nfsc/libnfs-raw.h>
@@ -527,9 +528,7 @@ int poll_lwip_socket(void)
 
 static void mtime_to_dos_date_time(uint32_t seconds, uint16_t *date, uint16_t *time)
 {
-    struct tm *timeinfo;
-    time_t t = seconds;
-    timeinfo = localtime(&t);
+    struct tm *timeinfo = gmtime(&seconds);
     uint16_t dos_date = 0, dos_time = 0;
     dos_date = (timeinfo->tm_year - 80) << 9;
     dos_date |= (timeinfo->tm_mon + 1) << 5;
@@ -541,7 +540,7 @@ static void mtime_to_dos_date_time(uint32_t seconds, uint16_t *date, uint16_t *t
     *time = dos_time;
 }
 
-static void nfs_stat_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
     int continuation_id = (int)private_data;
     if (status != 0)
@@ -606,7 +605,7 @@ void handle_webserver_request(void)
     switch (op)
     {
     case SYS_STAT64:
-        nfs_stat64_async(nfs, (char *)rx_buf + 1, nfs_stat_async_cb, continuation_id);
+        nfs_stat64_async(nfs, (char *)rx_buf + 1, nfs_stat64_async_cb, continuation_id);
         break;
     case SYS_OPEN:
         break;
