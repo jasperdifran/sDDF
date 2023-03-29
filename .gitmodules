@@ -10,3 +10,6 @@
 [submodule "echo_server/musllibc"]
 	path = echo_server/musllibc
 	url = git@github.com:jasperdifran/musllibc.git
+[submodule "echo_server/sddf-mmc-rpi3b"]
+	path = echo_server/sddf-mmc-rpi3b
+	url = git@github.com:ptrk8/sddf-mmc-rpi3b.git
