@@ -74,9 +74,9 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
     {
         sel4cp_dbg_puts("Closing connection...\n");
         sel4cp_dbg_puts("Closing socket ");
-        sel4cp_dbg_puts(ip4addr_ntoa(&tpcb->remote_ip));
-        sel4cp_dbg_puts(":");
-        labelnum("", tpcb->remote_port);
+        // // sel4cp_dbg_puts(ip4addr_ntoa(&tpcb->remote_ip));
+        // sel4cp_dbg_puts(":");
+        // labelnum("", tpcb->remote_port);
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -158,9 +158,7 @@ int nfs_socket_close(int fd)
 {
     nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
 
-    sel4cp_dbg_puts("Closing socket ");
-    sel4cp_dbg_puts(ip4addr_ntoa(&sock->sock_tpcb->remote_ip));
-    labelnum("", sock->sock_tpcb->remote_port);
+    labelnum("Closing socket to port", sock->port);
 
     if (sock->used)
     {
