@@ -419,9 +419,9 @@ long sys_socket(va_list ap)
     sel4cp_mr_set(3, protocol);
 
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
-    int new_sd = sel4cp_mr_get(0);
-    labelnum("socket: ", new_sd);
-    return (long)new_sd;
+    int fd = sel4cp_mr_get(0);
+    labelnum("socket: ", fd);
+    return (long)fd;
 }
 
 long sys_fcntl(va_list ap)
@@ -477,10 +477,11 @@ long sys_socket_connect(va_list ap)
     const struct sockaddr *addr = va_arg(ap, const struct sockaddr *);
     int port = addr->sa_data[0] << 8 | addr->sa_data[1];
 
-    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 2);
+    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 3);
     // labelnum("socket_connect to port: ", port);
     sel4cp_mr_set(0, SEL4CP_SOCKET_CONNECT);
-    sel4cp_mr_set(1, port);
+    sel4cp_mr_set(1, sockfd);
+    sel4cp_mr_set(2, port);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
     // labelnum("socket_connect: ", val);
@@ -514,7 +515,7 @@ long sys_sendto(va_list ap)
     // sel4cp_dbg_puts("Trying to send to nfs\n");
     if (nfs_send_to_lwip != NULL)
     {
-        nfs_send_to_lwip(buf, len);
+        nfs_send_to_lwip(sockfd, buf, len);
     }
 
     return (long)len;
@@ -533,7 +534,7 @@ long sys_recvfrom(va_list ap)
     size_t read = 0;
     if (nfs_recv_from_lwip != NULL)
     {
-        read = nfs_recv_from_lwip(buf, len);
+        read = nfs_recv_from_lwip(sockfd, buf, len);
     }
 
     // labelnum("recvfrom bytes read: ", read);
@@ -588,7 +589,7 @@ long sys_close(va_list ap)
     int fd = va_arg(ap, int);
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 2);
     sel4cp_mr_set(0, SEL4CP_SOCKET_CLOSE);
-    sel4cp_mr_set(1, 0);
+    sel4cp_mr_set(1, fd);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
     labelnum("close: ", val);

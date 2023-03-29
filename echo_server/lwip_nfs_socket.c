@@ -29,10 +29,23 @@
 
 #define BUF_SIZE 2048
 
-// Stores listening socket tcp_ptcb
+#define NFS_SOCKETS 10
+#define NFS_SOCKET_FD_OFFSET 100
+
+#define NFS_SERVER_IP "10.13.1.90" // IP of Mac NFS server
+// #define NFS_SERVER_IP "10.13.0.11" // IP of NFSHomes
+
+typedef struct
+{
+    struct tcp_pcb *sock_tpcb;
+    int port;
+    int fd;
+    int connected;
+    int used;
+} nfs_socket_t;
+
 static struct tcp_pcb *tcp_socket;
-struct tcp_pcb *sockets[10];
-int socket_count = 0;
+nfs_socket_t nfs_sockets[10] = {0};
 
 extern nfs_state_t nfs_state;
 
@@ -41,13 +54,6 @@ void write_cyan(const char *str)
     sel4cp_dbg_puts("\033[36m");
     sel4cp_dbg_puts(str);
     sel4cp_dbg_puts("\033[0m");
-}
-
-int create_socket(void)
-{
-    write_cyan("Creating socket, early ret\n");
-    nfs_socket_create();
-    return 1;
 }
 
 int fcntl(void)
@@ -114,69 +120,89 @@ err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 
 void err_func(void *arg, err_t err)
 {
-    write_cyan("Error connecting to NFS server!\n");
-    labelnum("Error: ", err);
+    labelnum("Error with NFS socket", ((nfs_socket_t *)arg)->fd);
 }
 
-int socket_connect(int port)
+/**
+ * @brief Connect to an address. Corresponds to connect() in POSIX.
+ *
+ * @param fd
+ * @param port
+ * @return int
+ */
+int nfs_socket_connect(int fd, int port)
 {
-    // write_cyan("LWIP connecting nfs...\n");
-    labelnum("Connecting to port: ", port);
 
-    // // NFSHOMES
-    // nfs_socket_connect("10.13.0.11", port);
+    nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
+    sock->port = port;
 
-    // Mac
-    nfs_socket_connect("10.13.1.90", port);
-}
+    ip_addr_t ipaddr;
+    ip4_addr_set_u32(&ipaddr, ipaddr_addr(NFS_SERVER_IP));
 
-int socket_close()
-{
-    write_cyan("Closing socket\n");
-    nfs_socket_close();
-}
-
-int nfs_socket_close()
-{
-    sel4cp_dbg_puts("Closing socket ");
-    sel4cp_dbg_puts(ip4addr_ntoa(&tcp_socket->remote_ip));
-    sel4cp_dbg_puts(":");
-    labelnum("", tcp_socket->remote_port);
-    tcp_close(tcp_socket);
+    err_t error = tcp_connect(sock->sock_tpcb, &ipaddr, port, nfs_connected);
+    if (error != ERR_OK)
+    {
+        write_cyan("Error connecting\n");
+        return 1;
+    }
     return 0;
 }
 
+/**
+ * @brief Close a socket. Corresponds to close() in POSIX.
+ *
+ * @param fd. File descriptor for the socket
+ * @return int. Returns 0 on success, -1 on failure
+ */
+int nfs_socket_close(int fd)
+{
+    nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
+
+    sel4cp_dbg_puts("Closing socket ");
+    sel4cp_dbg_puts(ip4addr_ntoa(&sock->sock_tpcb->remote_ip));
+    labelnum("", sock->sock_tpcb->remote_port);
+
+    if (sock->used)
+    {
+        if (tcp_close(sock))
+        {
+            return -1;
+        }
+    }
+    sock->used = 0;
+    sock->sock_tpcb = NULL;
+    sock->port = -1;
+    return 0;
+}
+
+/**
+ * @brief Create a socket object. Corresponds to socket() in POSIX.
+ *
+ * @return integer. File descriptor for the new socket
+ */
 int nfs_socket_create(void)
 {
-    tcp_socket = tcp_new_ip_type(IPADDR_TYPE_V4);
-    if (tcp_socket == NULL)
+    int freeSocketInd = 0;
+    while (nfs_sockets[freeSocketInd].used)
+        freeSocketInd++;
+    nfs_socket_t *freeSocket = &nfs_sockets[freeSocketInd];
+
+    freeSocket->sock_tpcb = tcp_new_ip_type(IPADDR_TYPE_V4);
+    if (freeSocket->sock_tpcb == NULL)
     {
         write_cyan("Error creating socket\n");
         return 1;
     }
-    tcp_err(tcp_socket, err_func);
+
+    freeSocket->used = 1;
+
+    tcp_err(freeSocket->sock_tpcb, err_func);
+    tcp_arg(freeSocket->sock_tpcb, freeSocket);
 
     int i = 512;
-    while (tcp_bind(tcp_socket, IP_ADDR_ANY, i) != ERR_OK)
+    while (tcp_bind(freeSocket->sock_tpcb, IP_ADDR_ANY, i) != ERR_OK)
         i++;
-    return 0;
-}
-
-int nfs_socket_connect(char *addr, int port)
-{
-    ip_addr_t ipaddr;
-    ip4_addr_set_u32(&ipaddr, ipaddr_addr(addr));
-
-    labelnum("Connecting to port: ", port);
-
-    err_t error = tcp_connect(tcp_socket, &ipaddr, port, nfs_connected);
-    if (error != ERR_OK)
-    {
-        write_cyan("Error connecting\n");
-        labelnum("Error: ", error);
-        return 1;
-    }
-    return 0;
+    return freeSocket->fd;
 }
 
 void char_to_hex(char c, char *buf)
@@ -259,14 +285,29 @@ int nfs_socket_process_tx(void)
             return 1;
         }
 
-        error = tcp_write(tcp_socket, (void *)data, len, 1);
+        int fd = (int)cookie;
+        nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
+
+        error = tcp_write(sock->sock_tpcb, (void *)data, len, 1);
         if (error != ERR_OK)
         {
             sel4cp_dbg_puts("Failed to write to socket\n");
             return 1;
         }
-        tcp_output(tcp_socket);
-        enqueue_avail(&nfs_state.tx_ring, data, BUF_SIZE, cookie);
+        tcp_output(sock->sock_tpcb);
+        enqueue_avail(&nfs_state.tx_ring, data, BUF_SIZE, 0);
     }
     return 0;
+}
+
+void nfs_init_sockets(void)
+{
+    for (int i = 0; i < NFS_SOCKETS; i++)
+    {
+        nfs_sockets[i].sock_tpcb = NULL;
+        nfs_sockets[i].port = -1;
+        nfs_sockets[i].fd = i + NFS_SOCKET_FD_OFFSET;
+        nfs_sockets[i].connected = 0;
+        nfs_sockets[i].used = 0;
+    }
 }

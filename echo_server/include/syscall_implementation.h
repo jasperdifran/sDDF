@@ -14,9 +14,9 @@ extern void *__sysinfo;
 
 void syscalls_init(void);
 
-typedef void (*socket_send_t)(void *buf, size_t len);
-typedef size_t (*socket_recv_t)(void *buf, size_t len);
-typedef void (*socket_close_t)(void);
+typedef void (*socket_send_t)(int fd, void *buf, size_t len);
+typedef size_t (*socket_recv_t)(int fd, void *buf, size_t len);
+typedef void (*socket_close_t)(int fd);
 
 static inline void write_red(char *s)
 {

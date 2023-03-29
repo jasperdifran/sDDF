@@ -381,7 +381,7 @@ void writenum(int num)
     }
 }
 
-static void __nfs_send_to_lwip(void *buffer, size_t len)
+static void __nfs_send_to_lwip(int fd, void *buffer, size_t len)
 {
     char *buf = (char *)buffer;
     unsigned int bytes_written = 0;
@@ -411,7 +411,7 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
         }
         bytes_written += bytes_to_write;
 
-        enqueue_used(&lwip_tx_ring, tx_buf, bytes_to_write, 0);
+        enqueue_used(&lwip_tx_ring, tx_buf, bytes_to_write, (uintptr_t)fd);
     }
     sel4cp_notify(LWIP_NFS_CH);
 }
@@ -419,7 +419,7 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
 int nfs_socket_read = 0, nfs_socket_write = 0;
 char *nfs_socket_buf[BUF_SIZE];
 
-static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
+static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
 {
     char *buf = (char *)buffer;
     unsigned int bytes_read = 0;

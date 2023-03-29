@@ -433,6 +433,8 @@ void init(void)
 
     // gpt_init();
 
+    nfs_init_sockets();
+
     LWIP_MEMPOOL_INIT(RX_POOL);
 
     get_mac();
@@ -461,10 +463,10 @@ void init(void)
 void labelnum(char *s, uint64_t n);
 
 // Array of function pointers
-static int (*socket_funcs[])(int arg) = {
-    create_socket,
-    socket_connect,
-    socket_close,
+static int (*nfs_socket_funcs[])(int arg1, int arg2) = {
+    nfs_socket_create,
+    nfs_socket_connect,
+    nfs_socket_close,
 };
 
 seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
@@ -473,9 +475,10 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
     {
     case LWIP_NFS_CH:;
         int syscall = sel4cp_mr_get(0);
-        int arg = sel4cp_mr_get(1);
+        int arg1 = sel4cp_mr_get(1);
+        int arg2 = sel4cp_mr_get(2);
 
-        int res = socket_funcs[syscall](arg);
+        int res = nfs_socket_funcs[syscall](arg1, arg2);
         sel4cp_msginfo msg = sel4cp_msginfo_new(0, 1);
         sel4cp_mr_set(0, res);
         return msg;
