@@ -21,6 +21,17 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
+typedef struct
+{
+    int id;
+    int used;
+    void *tx_cookie;
+} request_cont_t;
+
+#define MAX_REQUESTS 10
+
+request_cont_t request_conts[MAX_REQUESTS];
+
 pid_t my_pid = WEBSRV_PID;
 
 uintptr_t rx_websrv_avail;
@@ -103,7 +114,6 @@ void copy_mpybuf_to_ringbuf(void *cookie)
 
         if (ring_empty(lwip_tx_ring.avail_ring))
         {
-            // sel4cp_dbg_puts("lwip_tx_ring.avail_ring is empty");
             sel4cp_notify(LWIP_CH);
         }
         // while (ring_empty(&lwip_tx_ring));
@@ -155,6 +165,11 @@ void notified(sel4cp_channel ch)
             /* Init a response buf and process request */
             tx_len = 0;
             run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
+            // if (status == 0)
+            // {
+            //     sel4cp_dbg_puts("Failed to run webserver\n");
+            //     return;
+            // }
 
             /* Copy response buf to ring buf */
             copy_mpybuf_to_ringbuf(rx_cookie);
