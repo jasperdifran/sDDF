@@ -20,6 +20,9 @@
 #define ETHER_MTU 1500
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
+#define MAX_REQUEST_CONTS 10
+
+int req_ids = 0;
 
 typedef struct
 {
@@ -28,9 +31,7 @@ typedef struct
     void *tx_cookie;
 } request_cont_t;
 
-#define MAX_REQUESTS 10
-
-request_cont_t request_conts[MAX_REQUESTS];
+request_cont_t request_conts[MAX_REQUEST_CONTS] = {0};
 
 pid_t my_pid = WEBSRV_PID;
 
@@ -143,12 +144,29 @@ void req_file(char *filename)
     sel4cp_notify(NFS_CH);
 }
 
+void stat_file(char *filename)
+{
+    void *continuation_id;
+    uintptr_t tx_buf;
+    unsigned int buf_len;
+
+    dequeue_avail(&nfs_tx_ring, &tx_buf, &buf_len, &continuation_id);
+    int pathLen = strlen(filename);
+    char *buf = (char *)tx_buf;
+    buf[0] = SYS_STAT64;
+    memcpy(buf + 1, filename, pathLen);
+    buf[pathLen + 1] = '\0';
+    enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 1, continuation_id);
+
+    sel4cp_notify(NFS_CH);
+}
+
 void notified(sel4cp_channel ch)
 {
     switch (ch)
     {
     case LWIP_CH:;
-        /* Get request packet from lwip */
+        /* Incoming new request packet from lwip */
         while (!ring_empty(lwip_rx_ring.used_ring))
         {
             uintptr_t rx_buf;
@@ -180,6 +198,9 @@ void notified(sel4cp_channel ch)
             sel4cp_notify(LWIP_CH);
         }
         break;
+    case NFS_CH:;
+        /* Continuation of a request */
+
     default:
         sel4cp_dbg_puts("Unknown notif\n");
         break;
