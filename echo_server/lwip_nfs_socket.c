@@ -56,18 +56,21 @@ int fcntl(void)
     int cmd = sel4cp_mr_get(2);
     int arg = sel4cp_mr_get(3);
     sel4cp_dbg_puts("fcntl\n");
-    labelnum("fd: ", fd);
-    labelnum("cmd: ", cmd);
-    labelnum("arg: ", arg);
+    labelnum("fd", fd);
+    labelnum("cmd", cmd);
+    labelnum("arg", arg);
     return 0;
 }
 
 static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err)
 {
-    sel4cp_dbg_puts("Recv callback\n");
     if (p == NULL)
     {
         sel4cp_dbg_puts("Closing connection...\n");
+        sel4cp_dbg_puts("Closing socket ");
+        sel4cp_dbg_puts(ip4addr_ntoa(&tpcb->remote_ip));
+        sel4cp_dbg_puts(":");
+        labelnum("", tpcb->remote_port);
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -96,7 +99,6 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
 
 static err_t nfs_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 {
-    sel4cp_dbg_puts("Sent callback\n");
     return ERR_OK;
 }
 
@@ -118,9 +120,14 @@ void err_func(void *arg, err_t err)
 
 int socket_connect(int port)
 {
-    write_cyan("LWIP connecting nfs...\n");
+    // write_cyan("LWIP connecting nfs...\n");
+    labelnum("Connecting to port: ", port);
 
-    nfs_socket_connect("10.13.0.11", port);
+    // // NFSHOMES
+    // nfs_socket_connect("10.13.0.11", port);
+
+    // Mac
+    nfs_socket_connect("10.13.1.90", port);
 }
 
 int socket_close()
@@ -131,6 +138,10 @@ int socket_close()
 
 int nfs_socket_close()
 {
+    sel4cp_dbg_puts("Closing socket ");
+    sel4cp_dbg_puts(ip4addr_ntoa(&tcp_socket->remote_ip));
+    sel4cp_dbg_puts(":");
+    labelnum("", tcp_socket->remote_port);
     tcp_close(tcp_socket);
     return 0;
 }
@@ -144,6 +155,10 @@ int nfs_socket_create(void)
         return 1;
     }
     tcp_err(tcp_socket, err_func);
+
+    int i = 512;
+    while (tcp_bind(tcp_socket, IP_ADDR_ANY, i) != ERR_OK)
+        i++;
     return 0;
 }
 
@@ -230,7 +245,6 @@ void print_bright_green_buf(uintptr_t buf, int len)
 
 int nfs_socket_process_tx(void)
 {
-    write_cyan("Processing TX\n");
     err_t error = ERR_OK;
     while (!ring_empty(nfs_state.tx_ring.used_ring))
     {
@@ -244,9 +258,6 @@ int nfs_socket_process_tx(void)
             sel4cp_dbg_puts("Failed to dequeue used from tx_ring\n");
             return 1;
         }
-
-        labelnum("len: ", len);
-        // print_bright_magenta_buf(data, len);
 
         error = tcp_write(tcp_socket, (void *)data, len, 1);
         if (error != ERR_OK)

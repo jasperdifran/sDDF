@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <syscall_implementation.h>
 #include <poll.h>
+#include <fcntl.h>
 
 #include "shared_ringbuffer.h"
 
@@ -26,10 +27,13 @@
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
 
-#define SERVER "10.1.1.27"
-#define EXPORT "/"
-#define NFSFILE "/BOOKS/Classics/Dracula.djvu"
-#define NFSDIR "/BOOKS/Classics/"
+#define SERVER "10.13.1.90"
+// #define EXPORT "/export/home/imx8mm"
+// #define EXPORT "/System/Volumes/Data/Users/jasperdifrancesco/export/imx8mm"
+#define EXPORT "/Users/jasperdifrancesco/export"
+#define NFSFILE "foo"
+#define NFSFILE2 "otherfile"
+// #define NFSDIR "/BOOKS/Classics/"
 
 pid_t my_pid = NFS_PID;
 extern socket_send_t nfs_send_to_lwip;
@@ -55,19 +59,11 @@ struct client client = {
     .is_finished = 0,
 };
 
+struct nfsfh *nfsfh = NULL;
+
 struct pollfd pfds[2]; /* nfs:0  mount:1 */
 
-// struct nfs_context *nfsContext = NULL;
-
-// void nfs_mount_cb(int err, struct nfs_context *nfs, void *data, void *private_data)
-// {
-//     if (err != 0)
-//     {
-//         sel4cp_dbg_puts("nfs_mount_cb: failed to mount nfs share\n");
-//         return;
-//     }
-//     sel4cp_dbg_puts("nfs_mount_cb: nfs share mounted\n");
-// }
+void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data);
 
 void write_bright_green(const char *str)
 {
@@ -76,15 +72,190 @@ void write_bright_green(const char *str)
     sel4cp_dbg_puts("\033[0m");
 }
 
+void nfs_null_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_null_cb\n");
+}
+
+void labelnum(char *s, int a);
+void nfs_write_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_write_async_cb\n");
+    labelnum("nfs_write_async_cb status: ", status);
+    if (status < 0)
+    {
+        sel4cp_dbg_puts("nfs_write_async_cb: failed to write to nfs file\n");
+        if (nfs_get_error(nfs) != NULL)
+        {
+            sel4cp_dbg_puts("nfs_write_async_cb: error: ");
+            sel4cp_dbg_puts(nfs_get_error(nfs));
+            sel4cp_dbg_puts("\n");
+        }
+    }
+    else
+    {
+        sel4cp_dbg_puts("nfs_write_async_cb: wrote to nfs file\n");
+    }
+    nfs_close_async(nfs, nfsfh, nfs_null_cb, NULL);
+}
+
+void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_read_async_cb\n");
+    labelnum("nfs_write_async_cb status: ", status);
+    if (status < 0)
+    {
+        sel4cp_dbg_puts("nfs_read_async_cb: failed to read from nfs file\n");
+        if (nfs_get_error(nfs) != NULL)
+        {
+            sel4cp_dbg_puts("nfs_read_async_cb: error: ");
+            sel4cp_dbg_puts(nfs_get_error(nfs));
+            sel4cp_dbg_puts("\n");
+        }
+        if (data != NULL)
+        {
+            sel4cp_dbg_puts("nfs_read_async_cb: data: ");
+            sel4cp_dbg_puts((char *)data);
+            sel4cp_dbg_puts("\n");
+        }
+    }
+    else
+    {
+        sel4cp_dbg_puts("nfs_read_async_cb: read from nfs file: ");
+        sel4cp_dbg_puts((char *)data);
+        sel4cp_dbg_puts("\n");
+    }
+}
+
+void nfs_creat_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_creat_async_cb\n");
+    nfsfh = (struct nfsfh *)data;
+    if (status != 0)
+    {
+        sel4cp_dbg_puts("nfs_creat_async_cb: failed to create nfs file\n");
+        if (nfs_get_error(nfs) != NULL)
+        {
+            sel4cp_dbg_puts("nfs_creat_async_cb: error: ");
+            sel4cp_dbg_puts(nfs_get_error(nfs));
+            sel4cp_dbg_puts("\n");
+        }
+    }
+    else
+    {
+        sel4cp_dbg_puts("nfs_creat_async_cb: nfs file created\n");
+        nfs_write_async(nfs, nfsfh, 4, "test", nfs_write_async_cb, NULL);
+    }
+}
+
+// void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+// {
+//     sel4cp_dbg_puts("nfs_close_async_cb\n");
+//     if (status != 0)
+//     {
+//         sel4cp_dbg_puts("nfs_close_async_cb: failed to close nfs file\n");
+//     }
+//     else
+//     {
+//         sel4cp_dbg_puts("nfs_close_async_cb: nfs file closed\n");
+//     }
+//     nfs_creat_async(nfs, NFSFILE2, O_CREAT | O_WRONLY, nfs_creat_async_cb, NULL);
+// }
+
+void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_open_async_cb\n");
+    if (status != 0)
+    {
+        sel4cp_dbg_puts("nfs_open_async_cb: failed to open nfs file\n");
+        if (nfs_get_error(nfs) != NULL)
+        {
+            sel4cp_dbg_puts("nfs_open_async_cb: error: ");
+            sel4cp_dbg_puts(nfs_get_error(nfs));
+            sel4cp_dbg_puts("\n");
+        }
+
+        if (data != NULL)
+        {
+            sel4cp_dbg_puts("nfs_open_async_cb: data: ");
+            sel4cp_dbg_puts((char *)data);
+            sel4cp_dbg_puts("\n");
+        }
+    }
+    else
+    {
+        sel4cp_dbg_puts("nfs_open_async_cb: nfs file opened\n");
+        nfsfh = (struct nfsfh *)data;
+        // nfs_close_async(nfs, nfsfh, nfs_close_async_cb, NULL);
+        // nfs_write_async(nfs, nfsfh, 29, "Writing with a longer string", nfs_write_async_cb, NULL);
+        nfs_read_async(nfs, nfsfh, 4, nfs_read_async_cb, NULL);
+    }
+}
+
+void nfs_open_read_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_open_async_cb\n");
+    if (status != 0)
+    {
+        sel4cp_dbg_puts("nfs_open_async_cb: failed to open nfs file\n");
+        if (nfs_get_error(nfs) != NULL)
+        {
+            sel4cp_dbg_puts("nfs_open_async_cb: error: ");
+            sel4cp_dbg_puts(nfs_get_error(nfs));
+            sel4cp_dbg_puts("\n");
+        }
+    }
+    else
+    {
+        sel4cp_dbg_puts("nfs_open_async_cb: nfs file opened\n");
+        nfsfh = (struct nfsfh *)data;
+        // nfs_close_async(nfs, nfsfh, nfs_close_async_cb, NULL);
+        nfs_read_async(nfs, nfsfh, 29, nfs_read_async_cb, NULL);
+    }
+}
+
+void nfs_do()
+{
+    sel4cp_dbg_puts("nfs_do\n");
+    if (nfs_open_async(nfs, NFSFILE2, O_RDONLY, nfs_open_read_async_cb, NULL) != 0)
+    // if (nfs_creat_async(nfs, NFSFILE2, MASK(9), nfs_open_async_cb, NULL))
+    // if (nfs_open_async(nfs, NFSFILE2, O_RDWR | O_CREAT, nfs_open_async_cb, NULL) != 0)
+    {
+        printf("Failed to start async nfs stat\n");
+        exit(10);
+    }
+}
+
+void nfs_fake_close(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    sel4cp_dbg_puts("nfs_fake_close\n");
+    // (void(*) void *)private_data();
+    ((void (*)())private_data)(NULL);
+}
+
+void nfs_fake_open(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    nfs_close_async(nfs, data, nfs_fake_close, private_data);
+}
+
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data)
 {
-    sel4cp_dbg_puts((char *)data);
+    sel4cp_dbg_puts("nfs_connect_cb\n");
     if (err != 0)
     {
         sel4cp_dbg_puts("nfs_connect_cb: failed to connect to nfs server\n");
+        sel4cp_dbg_puts(nfs_get_error(nfs));
+        sel4cp_dbg_puts("\n");
         return;
     }
     sel4cp_dbg_puts("nfs_connect_cb: connected to nfs server\n");
+
+    // if (nfs_creat_async(nfs, NFSFILE2, MASK(9), nfs_creat_async_cb, NULL) != 0)
+    if (nfs_open_async(nfs, NFSFILE2, O_RDWR, nfs_open_async_cb, NULL) != 0)
+    {
+        printf("Failed to start async nfs stat\n");
+        exit(10);
+    }
 }
 
 uintptr_t rx_nfs_avail;
@@ -125,11 +296,7 @@ void init_post(void)
         sel4cp_dbg_puts("init: failed to connect to nfs server\n");
         return;
     }
-    sel4cp_dbg_puts("init: connected to nfs server\n");
-
-    sel4cp_dbg_puts("Init nfs pd\n");
-
-    // write_pointer_hex(nfs_connect_cb);
+    sel4cp_dbg_puts("init: connecting to nfs server\n");
 }
 
 void write_num(int num)
@@ -214,37 +381,22 @@ void writenum(int num)
     }
 }
 
-// void labelnum(const char *label, int num)
-// {
-//     sel4cp_dbg_puts(label);
-//     write_num(num);
-//     sel4cp_dbg_puts("\n");
-// }
-
 static void __nfs_send_to_lwip(void *buffer, size_t len)
 {
-
-    sel4cp_dbg_puts("nfs_send_to_lwip: \n");
     char *buf = (char *)buffer;
     unsigned int bytes_written = 0;
 
     while (bytes_written < len)
     {
-        sel4cp_dbg_puts("nfs_send_to_lwip: while loop\n");
-        // sel4cp_dbg_puts("Copying mpybuf to ringbuf");
-        // label_num("bytes_written: ", bytes_written);
-        // label_num("len: ", len);
         void *tx_cookie;
         uintptr_t tx_buf;
         unsigned int temp_len;
 
         if (ring_empty(lwip_tx_ring.avail_ring))
         {
-            // sel4cp_dbg_puts("lwip_tx_ring.avail_ring is empty");
             sel4cp_notify(LWIP_NFS_CH);
         }
-        // while (ring_empty(&lwip_tx_ring))
-        //     ;
+
         int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
         {
@@ -253,7 +405,6 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
         }
 
         unsigned int bytes_to_write = MIN((len - bytes_written), BUF_SIZE);
-        labelnum("bytes_to_write: ", bytes_to_write);
         for (unsigned int i = 0; i < bytes_to_write; i++)
         {
             ((char *)tx_buf)[i] = buf[bytes_written + i];
@@ -263,7 +414,6 @@ static void __nfs_send_to_lwip(void *buffer, size_t len)
         enqueue_used(&lwip_tx_ring, tx_buf, bytes_to_write, 0);
     }
     sel4cp_notify(LWIP_NFS_CH);
-    sel4cp_dbg_puts("nfs_send_to_lwip: done\n");
 }
 
 int nfs_socket_read = 0, nfs_socket_write = 0;
@@ -271,7 +421,6 @@ char *nfs_socket_buf[BUF_SIZE];
 
 static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
 {
-    labelnum("nfs_recv_from_lwip: len: ", len);
     char *buf = (char *)buffer;
     unsigned int bytes_read = 0;
 
@@ -309,7 +458,6 @@ static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
 
         // Copy from rx_buf to buf
         unsigned int bytes_to_read = MIN((len - bytes_read), BUF_SIZE);
-        labelnum("bytes_to_read: ", bytes_to_read);
         for (unsigned int i = 0; i < bytes_to_read; i++)
         {
             buf[bytes_read + i] = ((char *)rx_buf)[i];
@@ -319,29 +467,39 @@ static size_t __nfs_recv_from_lwip(void *buffer, size_t len)
         // More in the buffer than NFS is requesting. Fill our socket_buf with what's left
         if (temp_len > bytes_to_read)
         {
-            sel4cp_dbg_puts("More in the buffer than NFS is requesting. Fill our socket_buf with what's left\n");
-            labelnum("temp_len - bytes_to_read: ", temp_len - bytes_to_read);
             for (unsigned int i = 0; i < temp_len - bytes_to_read; i++)
             {
                 nfs_socket_buf[nfs_socket_write] = ((char *)rx_buf)[bytes_to_read + i];
                 nfs_socket_write++;
                 nfs_socket_write %= BUF_SIZE;
             }
-            labelnum("nfs_socket_write: ", nfs_socket_write);
-            labelnum("nfs_socket_read: ", nfs_socket_read);
         }
 
         enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, 0);
-        // print_bright_magenta_buf((uintptr_t)rx_buf, len);
     }
 
-    print_bright_magenta_buf((uintptr_t)buf, len);
     return bytes_read;
 }
 
 static size_t __nfs_close_lwip_sock()
 {
     nfs_socket_connected = false;
+    // Empty the socket of incoming data
+    while (!ring_empty(lwip_rx_ring.used_ring))
+    {
+        void *rx_cookie;
+        uintptr_t rx_buf;
+        unsigned int temp_len;
+
+        int error = dequeue_used(&lwip_rx_ring, &rx_buf, &temp_len, &rx_cookie);
+        if (error)
+        {
+            sel4cp_dbg_puts("Failed to dequeue used from lwip_rx_ring\n");
+            return 0;
+        }
+
+        enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, 0);
+    }
 }
 
 int poll_lwip_socket(void)
@@ -376,13 +534,11 @@ void notified(sel4cp_channel ch)
         }
         else if (!nfs_socket_connected)
         {
-            write_bright_green("NFS socket connected\n");
             nfs_socket_connected = true;
             nfs_service(nfs, 0);
         }
         else
         {
-            write_bright_green("NFS RX...\n");
             nfs_service(nfs, poll_lwip_socket());
         }
         break;
@@ -393,7 +549,6 @@ void notified(sel4cp_channel ch)
     case TIMER_CH:
         if (nfs_socket_connected)
         {
-            write_bright_green("NFS timer ticked\n");
             nfs_service(nfs, poll_lwip_socket());
         }
 

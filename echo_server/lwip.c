@@ -356,9 +356,7 @@ void init_post(void)
 
     // setup_udp_socket();
     // setup_utilization_socket();
-    sel4cp_dbg_puts("Setting up webserv TCP socket\n");
     websrv_setup_tcp_socket();
-    sel4cp_dbg_puts("Notifying LWIP_NFS_CH for initialisation\n");
     sel4cp_notify(LWIP_NFS_CH);
 
     sel4cp_dbg_puts(sel4cp_name);
@@ -473,13 +471,11 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, sel4cp_msginfo msginfo)
 {
     switch (ch)
     {
-    case LWIP_NFS_CH:
-        sel4cp_dbg_puts("NFS channel sent us a something\n");
+    case LWIP_NFS_CH:;
         int syscall = sel4cp_mr_get(0);
         int arg = sel4cp_mr_get(1);
 
         int res = socket_funcs[syscall](arg);
-        labelnum("ret: ", res);
         sel4cp_msginfo msg = sel4cp_msginfo_new(0, 1);
         sel4cp_mr_set(0, res);
         return msg;
@@ -507,7 +503,6 @@ void notified(sel4cp_channel ch)
         sys_check_timeouts();
         return;
     case LWIP_NFS_CH:
-        write_red("NFS channel notified us\n");
         nfs_socket_process_tx();
         return;
     default:

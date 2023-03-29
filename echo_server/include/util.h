@@ -21,6 +21,9 @@
 #define unlikely(x) (!!(x))
 #endif
 
+#define MASK(x) ((1 << (x)) - 1)
+#define BIT(x) (1 << (x))
+
 static void
 putC(uint8_t ch)
 {
