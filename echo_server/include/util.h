@@ -6,7 +6,7 @@
 #pragma once
 
 #define UART_REG(x) ((volatile uint32_t *)(UART_BASE + (x)))
-#define UART_BASE 0x5000000 //0x30890000 in hardware on imx8mm. 
+#define UART_BASE 0x5000000 // 0x30890000 in hardware on imx8mm.
 #define STAT 0x98
 #define TRANSMIT 0x40
 #define STAT_TDRE (1 << 14)
@@ -14,27 +14,31 @@
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 #ifdef __GNUC__
-#define likely(x)   __builtin_expect(!!(x), 1)
+#define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #else
-#define likely(x)   (!!(x))
+#define likely(x) (!!(x))
 #define unlikely(x) (!!(x))
 #endif
 
 #define MASK(x) ((1 << (x)) - 1)
 #define BIT(x) (1 << (x))
+#define MIN(a, b) (a < b) ? a : b
+#define MAX(a, b) (a > b) ? a : b
 
 static void
 putC(uint8_t ch)
 {
-    while (!(*UART_REG(STAT) & STAT_TDRE)) { }
+    while (!(*UART_REG(STAT) & STAT_TDRE))
+        ;
     *UART_REG(TRANSMIT) = ch;
 }
 
 static void
 print(const char *s)
 {
-    while (*s) {
+    while (*s)
+    {
         putC(*s);
         s++;
     }
@@ -53,7 +57,8 @@ puthex64(uint64_t val)
     buffer[0] = '0';
     buffer[1] = 'x';
     buffer[16 + 3 - 1] = 0;
-    for (unsigned i = 16 + 1; i > 1; i--) {
+    for (unsigned i = 16 + 1; i > 1; i--)
+    {
         buffer[i] = hexchar(val & 0xf);
         val >>= 4;
     }
