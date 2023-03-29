@@ -549,8 +549,9 @@ long sys_recvfrom(va_list ap)
 
 void debug_error(long num)
 {
-    labelnum("Error doing syscall: ", num);
+    labelnum("Error doing syscall", num);
     sel4cp_dbg_puts("\n");
+    labelnum("Coming from", my_pid);
 }
 
 int pthread_setcancelstate(int state, int *oldstate)

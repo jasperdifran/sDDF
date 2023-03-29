@@ -28,7 +28,7 @@ typedef struct
 {
     int id;
     int used;
-    void *tx_cookie;
+    void *socket_id;
 } request_cont_t;
 
 request_cont_t request_conts[MAX_REQUEST_CONTS] = {0};
@@ -53,8 +53,12 @@ ring_handle_t lwip_rx_ring;
 ring_handle_t lwip_tx_ring;
 ring_handle_t nfs_rx_ring;
 ring_handle_t nfs_tx_ring;
+
 char tx_data[BUF_SIZE * 256] = {0};
 unsigned int tx_len;
+
+void *cont_data_store = NULL;
+int cont_done = 0;
 
 void init(void)
 {
@@ -65,6 +69,13 @@ void init(void)
     ring_init(&nfs_rx_ring, (ring_buffer_t *)rx_nfs_websrv_avail, (ring_buffer_t *)rx_nfs_websrv_used, NULL, 0);
     ring_init(&nfs_tx_ring, (ring_buffer_t *)tx_nfs_websrv_avail, (ring_buffer_t *)tx_nfs_websrv_used, NULL, 0);
     sel4cp_dbg_puts("Init websrv pd\n");
+
+    for (int i = 0; i < MAX_REQUEST_CONTS; i++)
+    {
+        request_conts[i].id = i;
+        request_conts[i].used = 0;
+        request_conts[i].socket_id = NULL;
+    }
 }
 
 void printnum(int num)
@@ -182,24 +193,41 @@ void notified(sel4cp_channel ch)
 
             /* Init a response buf and process request */
             tx_len = 0;
+
+            // Find a free continuation to use. For now, assuming there is one free
+            // and we know that pretty much every request will be async.
+            int contInd = 0;
+            while (request_conts[contInd].used)
+                contInd++;
+            request_cont_t *cont = &request_conts[contInd];
+            cont->used = 1;
+            cont->socket_id = rx_cookie;
+
+            // We know that pretty much every request will be async
             run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
-            // if (status == 0)
-            // {
-            //     sel4cp_dbg_puts("Failed to run webserver\n");
-            //     return;
-            // }
+
+            if (cont_done)
+            {
+                sel4cp_dbg_puts("Continuation done\n");
+                cont_done = 0;
+                cont_data_store = NULL;
+                copy_mpybuf_to_ringbuf(rx_cookie);
+                sel4cp_notify(LWIP_CH);
+
+                cont->used = 0;
+                cont->socket_id = NULL;
+            }
 
             /* Copy response buf to ring buf */
-            copy_mpybuf_to_ringbuf(rx_cookie);
 
             /* Release req buf */
             enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, NULL);
-
-            sel4cp_notify(LWIP_CH);
         }
         break;
     case NFS_CH:;
         /* Continuation of a request */
+        sel4cp_dbg_puts("Websrv got a reponse from NFS CH\n");
+        break;
 
     default:
         sel4cp_dbg_puts("Unknown notif\n");
