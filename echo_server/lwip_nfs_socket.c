@@ -111,7 +111,7 @@ static err_t nfs_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 // Connected function
 err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
-    write_cyan("Successfully connected to NFS server!\n");
+    write_cyan("Connected to socket!\n");
     tcp_sent(tpcb, nfs_socket_sent_callback);
     tcp_recv(tpcb, nfs_socket_recv_callback);
     sel4cp_notify(LWIP_NFS_CH);
@@ -183,6 +183,8 @@ int nfs_socket_close(int fd)
 int nfs_socket_create(void)
 {
     int freeSocketInd = 0;
+
+    // We don't currently handle the case where there are no free sockets
     while (nfs_sockets[freeSocketInd].used)
         freeSocketInd++;
     nfs_socket_t *freeSocket = &nfs_sockets[freeSocketInd];
