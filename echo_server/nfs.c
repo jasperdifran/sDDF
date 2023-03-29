@@ -9,14 +9,11 @@
 #include <syscall_implementation.h>
 #include <poll.h>
 #include <fcntl.h>
-
-#include "shared_ringbuffer.h"
+#include <sys/stat.h>
 
 #include "shared_ringbuffer.h"
 
 #include "util.h"
-
-#define MIN(a, b) (a < b) ? a : b
 
 #define WEBSRV_CH 7
 #define LWIP_NFS_CH 8
@@ -26,42 +23,48 @@
 
 #define NUM_BUFFERS 512
 #define BUF_SIZE 2048
+#define NUM_OPEN_FILES 40
 
 #define SERVER "10.13.1.90"
 // #define EXPORT "/export/home/imx8mm"
 // #define EXPORT "/System/Volumes/Data/Users/jasperdifrancesco/export/imx8mm"
 #define EXPORT "/Users/jasperdifrancesco/export"
+
 #define NFSFILE "foo"
 #define NFSFILE2 "otherfile"
-// #define NFSDIR "/BOOKS/Classics/"
+
+typedef struct
+{
+    struct nfsfh *nfsfh;
+    int continuation_id;
+    int file_descriptor;
+    int used;
+} nfs_open_file_t;
+
+/**
+ * @brief Micropython stat structure. Mpy expects DOS time, hence the date and time split
+ *
+ */
+typedef struct
+{
+    uint32_t file_size;
+    uint16_t last_mod_date;
+    uint16_t last_mod_time;
+    uint8_t is_dir;
+} mpy_stat_t;
 
 pid_t my_pid = NFS_PID;
 extern socket_send_t nfs_send_to_lwip;
 extern socket_recv_t nfs_recv_from_lwip;
 extern socket_close_t nfs_close_lwip_sock;
 
-struct client
-{
-    char server[128];
-    char export[128];
-    uint32_t mount_port;
-    struct nfsfh *nfsfh;
-    int is_finished;
-};
-
-struct rpc_context *rpc;
-struct nfs_context *nfs;
-struct client client = {
-    .server = SERVER,
-    .export = EXPORT,
-    .mount_port = 0,
-    .nfsfh = NULL,
-    .is_finished = 0,
-};
-
-struct nfsfh *nfsfh = NULL;
+nfs_open_file_t nfs_open_files[NUM_OPEN_FILES] = {0};
 
 struct pollfd pfds[2]; /* nfs:0  mount:1 */
+struct nfs_context *nfs;
+
+// TODO remove
+struct nfsfh *nfsfh = NULL;
 
 void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data);
 
@@ -77,7 +80,7 @@ void nfs_null_cb(int status, struct nfs_context *nfs, void *data, void *private_
     sel4cp_dbg_puts("nfs_null_cb\n");
 }
 
-void labelnum(char *s, int a);
+void labelnum(char *s, uint64_t a);
 void nfs_write_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
     sel4cp_dbg_puts("nfs_write_async_cb\n");
@@ -249,7 +252,7 @@ void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *priv
         return;
     }
     sel4cp_dbg_puts("nfs_connect_cb: connected to nfs server\n");
-
+    return;
     // if (nfs_creat_async(nfs, NFSFILE2, MASK(9), nfs_creat_async_cb, NULL) != 0)
     if (nfs_open_async(nfs, NFSFILE2, O_RDWR, nfs_open_async_cb, NULL) != 0)
     {
@@ -291,7 +294,7 @@ void init_post(void)
         return;
     }
 
-    if (nfs_mount_async(nfs, client.server, client.export, nfs_connect_cb, &client) != 0)
+    if (nfs_mount_async(nfs, SERVER, EXPORT, nfs_connect_cb, NULL) != 0)
     {
         sel4cp_dbg_puts("init: failed to connect to nfs server\n");
         return;
@@ -522,6 +525,100 @@ int poll_lwip_socket(void)
     return ret;
 }
 
+static void mtime_to_dos_date_time(uint32_t seconds, uint16_t *date, uint16_t *time)
+{
+    struct tm *timeinfo;
+    time_t t = seconds;
+    timeinfo = localtime(&t);
+    uint16_t dos_date = 0, dos_time = 0;
+    dos_date = (timeinfo->tm_year - 80) << 9;
+    dos_date |= (timeinfo->tm_mon + 1) << 5;
+    dos_date |= timeinfo->tm_mday;
+    dos_time = timeinfo->tm_hour << 11;
+    dos_time |= timeinfo->tm_min << 5;
+    dos_time |= timeinfo->tm_sec / 2;
+    *date = dos_date;
+    *time = dos_time;
+}
+
+static void nfs_stat_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
+{
+    int continuation_id = (int)private_data;
+    if (status != 0)
+    {
+        sel4cp_dbg_puts("nfs_stat_async_cb: failed to stat file\n");
+        sel4cp_dbg_puts(nfs_get_error(nfs));
+        sel4cp_dbg_puts("\n");
+    }
+    else
+    {
+        struct nfs_stat_64 *st = (struct nfs_stat_64 *)data;
+        sel4cp_dbg_puts("nfs_stat_async_cb: stat file success\n");
+        labelnum("st->nfs_size: ", st->nfs_size);
+        labelnum("st->nfs_mode: ", st->nfs_mode);
+        labelnum("st->nfs_nlink: ", st->nfs_nlink);
+        labelnum("st->nfs_uid: ", st->nfs_uid);
+        labelnum("st->nfs_gid: ", st->nfs_gid);
+        labelnum("st->nfs_atime: ", st->nfs_atime);
+        labelnum("st->nfs_mtime: ", st->nfs_mtime);
+        labelnum("st->nfs_ctime: ", st->nfs_ctime);
+        labelnum("st->nfs_dev: ", st->nfs_dev);
+        labelnum("st->nfs_ino: ", st->nfs_ino);
+        labelnum("st->nfs_rdev: ", st->nfs_rdev);
+        labelnum("st->nfs_blksize: ", st->nfs_blksize);
+        labelnum("st->nfs_blocks: ", st->nfs_blocks);
+
+        mpy_stat_t mpy_stat;
+
+        mpy_stat.file_size = (uint32_t)st->nfs_size;
+        mtime_to_dos_date_time(st->nfs_mtime, &mpy_stat.last_mod_date, &mpy_stat.last_mod_time);
+        mpy_stat.is_dir = S_ISDIR(st->nfs_mode);
+
+        void *continuation_id;
+        uintptr_t rx_buf;
+        unsigned int buf_len;
+
+        int error = dequeue_avail(&websrv_rx_ring, &rx_buf, &buf_len, &continuation_id);
+        if (error)
+        {
+            sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
+            return;
+        }
+
+        memcpy((void *)rx_buf, st, sizeof(mpy_stat_t));
+        enqueue_used(&websrv_tx_ring, rx_buf, sizeof(mpy_stat_t), (void *)continuation_id);
+        sel4cp_notify(WEBSRV_CH);
+    }
+}
+
+void handle_webserver_request(void)
+{
+    // Only worry about receiving one at a time for now
+
+    sel4cp_dbg_puts("handle_webserver_request\n");
+    void *continuation_id;
+    uintptr_t rx_buf;
+    unsigned int buf_len;
+    dequeue_used(&websrv_tx_ring, &rx_buf, &buf_len, &continuation_id);
+
+    // The first byte of the buffer gives us the file operation they are going for
+    int op = ((char *)rx_buf)[0];
+    switch (op)
+    {
+    case SYS_STAT64:
+        nfs_stat64_async(nfs, (char *)rx_buf + 1, nfs_stat_async_cb, continuation_id);
+        break;
+    case SYS_OPEN:
+        break;
+    case SYS_READ:
+        break;
+    default:
+        break;
+    }
+
+    enqueue_avail(&websrv_tx_ring, rx_buf, BUF_SIZE, NULL);
+}
+
 void notified(sel4cp_channel ch)
 {
     switch (ch)
@@ -545,6 +642,7 @@ void notified(sel4cp_channel ch)
     case WEBSRV_CH:
         sel4cp_dbg_puts("Got notification from websrv\n");
         // Requesting a file
+        handle_webserver_request();
         break;
     case TIMER_CH:
         if (nfs_socket_connected)
