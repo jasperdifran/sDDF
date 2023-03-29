@@ -87,6 +87,11 @@ int *___errno_location(void)
     return __error();
 }
 
+int *__errno_location(void)
+{
+    return __error();
+}
+
 void print_num(uint64_t num)
 {
     char buf[10];
@@ -420,7 +425,6 @@ long sys_socket(va_list ap)
 
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int fd = sel4cp_mr_get(0);
-    labelnum("socket: ", fd);
     return (long)fd;
 }
 
@@ -439,7 +443,7 @@ long sys_fcntl(va_list ap)
 
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int new_sd = sel4cp_mr_get(0);
-    labelnum("fcntl: ", new_sd);
+    labelnum("fcntl", new_sd);
     return (long)new_sd;
 }
 
@@ -592,7 +596,6 @@ long sys_close(va_list ap)
     sel4cp_mr_set(1, fd);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
-    labelnum("close: ", val);
     return (long)val;
 }
 
