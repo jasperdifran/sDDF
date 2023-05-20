@@ -135,7 +135,7 @@
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
     </protection_domain>
 
-    <protection_domain name="websrv" priority="99">
+    <protection_domain name="websrv" priority="98">
         <program_image path="websrv.elf" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
@@ -157,7 +157,7 @@
 
     </protection_domain>
 
-    <protection_domain name="nfs" priority="98">
+    <protection_domain name="nfs" priority="99">
         <program_image path="nfs.elf" />
         <map mr="snvs" vaddr="0x5_200_000" perms="rw" cached="false" setvar_vaddr="snvs_base" />
         <map mr="uart" vaddr="0x5_000_000" perms="rw" cached="false" setvar_vaddr="uart_base" />

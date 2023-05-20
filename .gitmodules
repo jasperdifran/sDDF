@@ -3,16 +3,16 @@
 	url = git@github.com:jasperdifran/micropython.git
 [submodule "echo_server/libnfs"]
 	path = echo_server/libnfs
-	url = git@github.com:sahlberg/libnfs.git
+	url = git@github.com:jasperdifran/libnfs.git
 [submodule "echo_server/musl"]
 	path = echo_server/musl
 	url = git://git.musl-libc.org/musl
-[submodule "echo_server/musllibc"]
-	path = echo_server/musllibc
-	url = git@github.com:jasperdifran/musllibc.git
 [submodule "echo_server/sddf-mmc-rpi3b"]
 	path = echo_server/sddf-mmc-rpi3b
 	url = git@github.com:ptrk8/sddf-mmc-rpi3b.git
 [submodule "sel4_musllibc"]
-	path = echo_server/musllibc
+	path = echo_server/musllibc_sel4
 	url = git@github.com:seL4/musllibc.git
+[submodule "musllibc_jasperdifran"]
+	path = echo_server/musllibc
+	url = git@github.com:jasperdifran/musllibc.git
