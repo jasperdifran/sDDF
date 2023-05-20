@@ -13,3 +13,6 @@
 [submodule "echo_server/sddf-mmc-rpi3b"]
 	path = echo_server/sddf-mmc-rpi3b
 	url = git@github.com:ptrk8/sddf-mmc-rpi3b.git
+[submodule "sel4_musllibc"]
+	path = echo_server/musllibc
+	url = git@github.com:seL4/musllibc.git

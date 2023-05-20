@@ -33,6 +33,7 @@
 #define SEL4CP_SOCKET 0
 #define SEL4CP_SOCKET_CONNECT 1
 #define SEL4CP_SOCKET_CLOSE 2
+#define SEL4CP_SOCKET_DUP3 3
 
 #define STDOUT_FD 1
 #define STDERR_FD 2
@@ -87,10 +88,10 @@ int *___errno_location(void)
     return __error();
 }
 
-int *__errno_location(void)
-{
-    return __error();
-}
+// int *__errno_location(void)
+// {
+//     return __error();
+// }
 
 void print_num(uint64_t num)
 {
@@ -134,7 +135,7 @@ static size_t output(void *data, size_t count)
 
 long sys_brk(va_list ap)
 {
-
+    sel4cp_dbg_puts("sys_brk\n");
     uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
@@ -166,6 +167,7 @@ void labelnum_red(char *s, uint64_t n)
     sel4cp_dbg_puts("\033[0m\n");
 }
 
+/*
 void print_sys_mmap_flags(int flags)
 {
     if (flags & MAP_SHARED)
@@ -246,6 +248,7 @@ void print_sys_mmap_flags(int flags)
         write_red("\t\n");
     }
 }
+*/
 
 uintptr_t align_addr(uintptr_t addr)
 {
@@ -256,8 +259,8 @@ long sys_mmap(va_list ap)
 {
     void *addr = va_arg(ap, void *);
     size_t length = va_arg(ap, size_t);
-    if (length == 0)
-        length = 0x1000; // Default to 4K
+    // if (length == 0)
+    //     length = 0x1000; // Default to 4K
     int prot = va_arg(ap, int);
     int flags = va_arg(ap, int);
     int fd = va_arg(ap, int);
@@ -300,15 +303,18 @@ long sys_mmap(va_list ap)
         //     return ret;
         // }
         // else
-        {
-            /* Steal from the top */
-            // morecore_top -= length;
-            morecore_top = align_addr(morecore_top - length);
-            return morecore_top;
-        }
+        /* Steal from the top */
+        // morecore_top -= length;
+        morecore_top = morecore_top - length;
+        return morecore_top;
     }
     // sel4cp_dbg_puts("sys_mmap out of mem\n");
     return -ENOMEM;
+}
+
+long sys_madvise(va_list ap)
+{
+    return 0;
 }
 
 long sys_write(va_list ap)
@@ -430,10 +436,12 @@ long sys_socket(va_list ap)
 
 long sys_fcntl(va_list ap)
 {
-    return;
     int fd = va_arg(ap, int);
     int cmd = va_arg(ap, int);
     int arg = va_arg(ap, int);
+    labelnum_red("fcntl: cmd", cmd);
+    labelnum_red("fcntl: arg", arg);
+    return;
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
     sel4cp_mr_set(0, 2);
@@ -524,6 +532,57 @@ long sys_sendto(va_list ap)
 
     return (long)len;
 }
+/*
+void print_sys_recvfrom_flags(int flags) 
+{
+    sel4cp_dbg_puts("Flags: ");
+    if (flags & MSG_PEEK) {
+        sel4cp_dbg_puts("MSG_PEEK ");
+    } 
+    if (flags & MSG_OOB) {
+        sel4cp_dbg_puts("MSG_OOB ");
+    }
+    if (flags & MSG_WAITALL) {
+        sel4cp_dbg_puts("MSG_WAITALL ");
+    }
+    if (flags & MSG_DONTWAIT) {
+        sel4cp_dbg_puts("MSG_DONTWAIT ");
+    }
+    if (flags & MSG_EOR) {
+        sel4cp_dbg_puts("MSG_EOR ");
+    }
+    if (flags & MSG_TRUNC) {
+        sel4cp_dbg_puts("MSG_TRUNC ");
+    }
+    if (flags & MSG_CTRUNC) {
+        sel4cp_dbg_puts("MSG_CTRUNC ");
+    }
+    if (flags & MSG_ERRQUEUE) {
+        sel4cp_dbg_puts("MSG_ERRQUEUE ");
+    }
+    if (flags & MSG_NOSIGNAL) {
+        sel4cp_dbg_puts("MSG_NOSIGNAL ");
+    }
+    if (flags & MSG_MORE) {
+        sel4cp_dbg_puts("MSG_MORE ");
+    }
+    if (flags & MSG_WAITFORONE) {
+        sel4cp_dbg_puts("MSG_WAITFORONE ");
+    }
+    if (flags & MSG_BATCH) {
+        sel4cp_dbg_puts("MSG_BATCH ");
+    }
+    if (flags & MSG_ZEROCOPY) {
+        sel4cp_dbg_puts("MSG_ZEROCOPY ");
+    }
+    if (flags & MSG_FASTOPEN) {
+        sel4cp_dbg_puts("MSG_FASTOPEN ");
+    }
+    if (flags & MSG_CMSG_CLOEXEC) {
+        sel4cp_dbg_puts("MSG_CMSG_CLOEXEC ");
+    }
+    sel4cp_dbg_puts("\n");
+}*/
 
 long sys_recvfrom(va_list ap)
 {
@@ -533,6 +592,9 @@ long sys_recvfrom(va_list ap)
     int flags = va_arg(ap, int);
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
+
+    // labelnum_red("\n recvfrom: flags", flags);
+    // print_sys_recvfrom_flags(flags);
 
     // sel4cp_dbg_puts("Trying to recv from nfs\n");
     size_t read = 0;
@@ -550,7 +612,6 @@ long sys_recvfrom(va_list ap)
 void debug_error(long num)
 {
     labelnum("Error doing syscall", num);
-    sel4cp_dbg_puts("\n");
     labelnum("Coming from", my_pid);
 }
 
@@ -597,6 +658,28 @@ long sys_close(va_list ap)
     sel4cp_mr_set(1, fd);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
+    nfs_close_lwip_sock(fd);
+    return (long)val;
+}
+
+long sys_dup3(va_list ap)
+{
+    int oldfd = va_arg(ap, int);
+    int newfd = va_arg(ap, int);
+    int flags = va_arg(ap, int);
+    (void)flags;
+    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 3);
+    sel4cp_mr_set(0, SEL4CP_SOCKET_DUP3);
+    sel4cp_mr_set(1, oldfd);
+    sel4cp_mr_set(2, newfd);
+    sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
+    int val = sel4cp_mr_get(0);
+
+    sel4cp_dbg_puts("dup3 called\n");
+    labelnum("dup3 oldfd: ", oldfd);
+    labelnum("dup3 newfd: ", newfd);
+    labelnum("dup3 flags: ", flags);
+    labelnum("dup3 ret: ", val);
     return (long)val;
 }
 
@@ -626,4 +709,5 @@ void syscalls_init(void)
     syscall_table[__NR_sendto] = (muslcsys_syscall_t)sys_sendto;
     syscall_table[__NR_recvfrom] = (muslcsys_syscall_t)sys_recvfrom;
     syscall_table[__NR_close] = (muslcsys_syscall_t)sys_close;
+    syscall_table[__NR_dup3] = (muslcsys_syscall_t)sys_dup3;
 }

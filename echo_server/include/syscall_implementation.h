@@ -14,6 +14,7 @@
 #define SYS_OPEN 2
 #define SYS_CLOSE 3
 #define SYS_READ 4
+#define SYS_OPENREADCLOSE 5
 
 extern void *__sysinfo;
 

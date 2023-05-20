@@ -14,6 +14,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include <lwip_nfs_socket.h>
 
@@ -32,8 +35,8 @@
 #define NFS_SOCKETS 10
 #define NFS_SOCKET_FD_OFFSET 100
 
-#define NFS_SERVER_IP "10.13.1.90" // IP of Mac NFS server
-// #define NFS_SERVER_IP "10.13.0.11" // IP of NFSHomes
+// #define NFS_SERVER_IP "10.13.1.90" // IP of Mac NFS server
+#define NFS_SERVER_IP "10.13.0.11" // IP of NFSHomes
 
 typedef struct
 {
@@ -56,7 +59,7 @@ void write_cyan(const char *str)
     sel4cp_dbg_puts("\033[0m");
 }
 
-int fcntl(void)
+int lwip_fcntl(void)
 {
     int fd = sel4cp_mr_get(1);
     int cmd = sel4cp_mr_get(2);
@@ -81,22 +84,32 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
         return ERR_OK;
     }
 
-    uintptr_t data;
-    unsigned int len;
-    void *cookie;
-
-    int error = dequeue_avail(&nfs_state.rx_ring, &data, &len, &cookie);
-    if (error)
+    int len_to_read = p->tot_len;
+    // labelnum("len_to_read", len_to_read);
+    int len_read = 0;
+    while (len_to_read > 0)
     {
-        sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
-        return ERR_OK;
+        uintptr_t data;
+        unsigned int discard_len;
+        void *cookie;
+        // labelnum("len_to_read", len_to_read);
+        int error = dequeue_avail(&nfs_state.rx_ring, &data, &discard_len, &cookie);
+        if (error)
+        {
+            sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
+            return ERR_OK;
+        }
+
+        int len_to_read_this_round = MIN(len_to_read, BUF_SIZE);
+        pbuf_copy_partial(p, (void *)data, len_to_read_this_round, len_read);
+
+        cookie = (void *)tpcb;
+
+        enqueue_used(&nfs_state.rx_ring, data, len_to_read_this_round, cookie);
+
+        len_to_read -= len_to_read_this_round;
+        len_read += len_to_read_this_round;
     }
-
-    pbuf_copy_partial(p, (void *)data, p->tot_len, 0);
-
-    cookie = (void *)tpcb;
-
-    enqueue_used(&nfs_state.rx_ring, data, p->tot_len, cookie);
 
     sel4cp_notify(LWIP_NFS_CH);
     tcp_recved(tpcb, p->tot_len);
@@ -112,6 +125,8 @@ static err_t nfs_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
     write_cyan("Connected to socket!\n");
+    labelnum("fd", ((nfs_socket_t *)arg)->fd);
+    ((nfs_socket_t *)arg)->connected = 1;
     tcp_sent(tpcb, nfs_socket_sent_callback);
     tcp_recv(tpcb, nfs_socket_recv_callback);
     sel4cp_notify(LWIP_NFS_CH);
@@ -121,6 +136,7 @@ err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 void err_func(void *arg, err_t err)
 {
     labelnum("Error with NFS socket", ((nfs_socket_t *)arg)->fd);
+    labelnum("Error code", err);
 }
 
 /**
@@ -132,7 +148,7 @@ void err_func(void *arg, err_t err)
  */
 int nfs_socket_connect(int fd, int port)
 {
-
+    write_cyan("Connecting to socket...\n");    
     nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
     sock->port = port;
 
@@ -158,13 +174,12 @@ int nfs_socket_close(int fd)
 {
     nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
 
-    labelnum("Closing socket to port", sock->port);
-
     if (sock->used)
     {
         if (tcp_close(sock))
         {
             return -1;
+            write_cyan("Error closing socket\n");
         }
     }
     sock->used = 0;
@@ -203,6 +218,28 @@ int nfs_socket_create(void)
     while (tcp_bind(freeSocket->sock_tpcb, IP_ADDR_ANY, i) != ERR_OK)
         i++;
     return freeSocket->fd;
+}
+
+int nfs_socket_dup3(int oldfd, int newfd)
+{
+    nfs_socket_t *old_sock = &nfs_sockets[oldfd - NFS_SOCKET_FD_OFFSET];
+
+    if (newfd < NFS_SOCKET_FD_OFFSET || newfd >= NFS_SOCKET_FD_OFFSET + NFS_SOCKETS) {
+        return EBADF;
+    }
+    nfs_socket_t *new_sock = &nfs_sockets[newfd - NFS_SOCKET_FD_OFFSET];
+
+    tcp_close(new_sock->sock_tpcb);
+
+    if (old_sock->used)
+    {
+        new_sock->sock_tpcb = old_sock->sock_tpcb;
+        tcp_arg(new_sock->sock_tpcb, new_sock);
+        new_sock->used = 1;
+        new_sock->port = old_sock->port;
+        return newfd;
+    }
+    return -1;
 }
 
 void char_to_hex(char c, char *buf)
