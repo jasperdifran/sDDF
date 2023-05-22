@@ -181,7 +181,7 @@ void copy_mpybuf_to_ringbuf(void *cookie)
             sel4cp_notify(LWIP_CH);
         }
         // Wait until a buffer has been made available by lwip
-        while (ring_empty(&lwip_tx_ring));
+        // while (ring_empty(&lwip_tx_ring));
 
         int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
@@ -412,6 +412,7 @@ void print_bright_magenta_buf(uintptr_t buf, int len)
  */
 void handle_nfs_response()
 {
+    sel4cp_dbg_puts("Got NFS response\n");
     void *local_current_request_id;
     uintptr_t rx_buf;
     unsigned int buf_len;

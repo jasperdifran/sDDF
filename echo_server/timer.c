@@ -36,7 +36,7 @@ static uint32_t overflow_count;
 #define CNT 9
 
 // Want the timer to tick every 200ms
-#define TICK_MS 200
+#define TICK_MS 50ULL
 #define NS_IN_MS 1000ULL
 
 pid_t my_pid = LWIP_PID;
