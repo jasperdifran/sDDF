@@ -258,14 +258,12 @@ char *nfs_socket_buf[BUF_SIZE];
 
 static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
 {
-    // labelnum("nfs_recv_from_lwip: len: ", len);
     char *buf = (char *)buffer;
     unsigned int bytes_read = 0;
 
     // Check if we can first read leftover data
     while (nfs_socket_read != nfs_socket_write && bytes_read < len)
     {
-        // sel4cp_dbg_puts("nfs_recv_from_lwip: while loop\n");
         buf[bytes_read] = nfs_socket_buf[nfs_socket_read];
         nfs_socket_read++;
         nfs_socket_read %= BUF_SIZE;
@@ -306,10 +304,10 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
         }
         bytes_read += bytes_to_read;
 
-        // More in the buffer than NFS is requesting. Fill our socket_buf with what's left
+        // More in the buffer than NFS is requesting. Fill our socket_buf with what's left. Will be 
+        // at most BUF_SIZE - 1 bytes
         if (temp_len > bytes_to_read)
         {
-            // sel4cp_dbg_puts("nfs: Recv from lwip: temp_len > bytes_to_read\n");
             for (unsigned int i = 0; i < temp_len - bytes_to_read; i++)
             {
                 nfs_socket_buf[nfs_socket_write] = ((char *)rx_buf)[bytes_to_read + i];
@@ -335,7 +333,6 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
  */
 static size_t __nfs_close_lwip_sock()
 {
-    // sel4cp_dbg_puts("NFS closing lwip socket\n");
     nfs_socket_connected = false;
     // Empty the socket of incoming data
     while (!ring_empty(lwip_rx_ring.used_ring))
@@ -372,7 +369,6 @@ int poll_lwip_socket(void)
     {
         ret |= POLLIN;
     }
-    // labelnum("ret: ", ret);
     return ret;
 }
 
@@ -395,6 +391,7 @@ static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data,
     int continuation_id = (int)private_data;
     if (status != 0)
     {
+        // File not found
         sel4cp_dbg_puts("nfs_stat_async_cb: failed to stat file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
@@ -474,7 +471,8 @@ void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *p
         sel4cp_dbg_puts("nfs_close_async_cb: failed to close file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        // TODO properly handle error
+        // TODO return 500, or fail and free everything? At this point all required data 
+        // for the request has been send to websrv
     }
     else
     {
@@ -496,14 +494,8 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts("\n");
         sel4cp_dbg_puts(data);
         sel4cp_dbg_puts("\n");
-        // TODO properly handle error
+        // TODO return to webserver with 500
     } else {
-        // sel4cp_dbg_puts("nfs_read_async_cb: read file\n");
-        // print_bright_green_buf(data, status);
-        // labelnum("len_to_read", ((nfs_openreadclose_data_t *)private_data)->len_to_read);
-        // labelnum("status", status);
-        // sel4cp_dbg_puts((char *)data);
-        // sel4cp_dbg_puts("\n");
         // Now we send the data back to the webserver 
         // We need to send back the command ID and how many bytes we read first, they should be stuck onto the 
         // front of the first buffer.
@@ -511,7 +503,6 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         uintptr_t rx_buf;
         unsigned int buf_len;
 
-        // Add 5 to status to account for the command ID and the length of length int
         int len_to_be_sent = status;
         int len_sent = 0;
 
@@ -519,19 +510,16 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         if (error)
         {
             sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
+            // TODO return to webserver with 500
             return;
         }
 
 
         // Set first bit to id of op
         ((char *)rx_buf)[0] = SYS_OPENREADCLOSE;
-        // len_sent += 1;
-        // len_to_be_sent -= 1;
 
         // Set next 4 to length of entire data
         split_int_to_buf(((nfs_openreadclose_data_t *)private_data)->len_to_read, (char *)rx_buf + 1);
-        // len_sent += 4;
-        // len_to_be_sent -= 4;
 
         // Send the first buffer with the command ID and how many bytes we read. Can fit at most BUF_SIZE - len_sent
         // bytes in this buffer
@@ -539,36 +527,33 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         memcpy((char *)rx_buf + 5, (char *)data, send_this_round);
         len_sent += send_this_round;
         len_to_be_sent -= send_this_round;
-        // sel4cp_dbg_puts("Our bit\n");
-
-        // print_bright_green_buf(rx_buf, len_sent);
 
         error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round + 5, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
         if (error) {
             sel4cp_dbg_puts("Failed to enqueue used to websrv_rx_ring\n");
+            // TODO return to webserver with 500
             return;
         }
 
         while (len_to_be_sent > 0)
         {
-            // labelnum("len_to_be_sent", len_to_be_sent);
-            // labelnum("len_sent", len_sent);
             error = dequeue_avail(&websrv_rx_ring, &rx_buf, &buf_len, &cookie_continuation_id);
             if (error)
             {
                 sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
+                // TODO return to webserver with 500
                 return;
             }
 
             send_this_round = MIN(len_to_be_sent, BUF_SIZE);
-            // labelnum("send_this_round", send_this_round);
 
             memcpy((char *)rx_buf, (char *)data + len_sent, send_this_round);
-            // print_bright_green_buf(rx_buf, send_this_round);
+
             error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
             if (error)
             {
                 sel4cp_dbg_puts("Failed to enqueue used to websrv_tx_ring\n");
+                // TODO return to webserver with 500
                 return;
             }
             len_to_be_sent -= send_this_round;
@@ -587,9 +572,8 @@ void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts("nfs_open_async_cb: failed to open file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        // TODO properly handle error
+        // TODO return to webserver with 404
     } else {
-        // sel4cp_dbg_puts("nfs_open_async_cb: opened file\n");
         ((nfs_openreadclose_data_t *)private_data)->file_handle = (struct nfsfh *)data;
         nfs_read_async(nfs, (struct nfsfh *)data, ((nfs_openreadclose_data_t *)private_data)->len_to_read, nfs_read_async_cb, private_data);
     }
@@ -611,9 +595,10 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
         i++;
     }
 
-    // TODO 5 arbitrary
-    if (i == 5) {
+    // TODO Should not be capped at NUM_OPEN_FILES
+    if (i == NUM_OPEN_FILES) {
         sel4cp_dbg_puts("handle_openreadclose: no free slots\n");
+        // TODO return to webserver with 500 error
         return;
     }
 
@@ -621,19 +606,15 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
     nfs_openreadclose_data[i].request_id = request_id;
     nfs_openreadclose_data[i].len_to_read = get_int_from_buf((char *)rx_buf, 1);
 
-    // labelnum("handle_openreadclose: len_to_read", nfs_openreadclose_data[i].len_to_read);
     sel4cp_dbg_puts((char *)rx_buf + 5);
     sel4cp_dbg_puts("\n");
-
 
     nfs_open_async(nfs, (char *)rx_buf + 5, O_RDONLY, nfs_open_async_cb, (void *)&nfs_openreadclose_data[i]);
 }
 
 void handle_webserver_request(void)
 {
-    // Only worry about receiving one at a time for now
-
-    // sel4cp_dbg_puts("handle_webserver_request\n");
+    // TODO: handle multiple requests
     void *request_id;
     uintptr_t rx_buf;
     unsigned int buf_len;
@@ -641,7 +622,7 @@ void handle_webserver_request(void)
 
     if (error)
     {
-        // sel4cp_dbg_puts("Failed to dequeue used from websrv_tx_ring\n");
+        sel4cp_dbg_puts("Failed to dequeue used from websrv_tx_ring\n");
         return;
     }
 
@@ -657,21 +638,18 @@ void handle_webserver_request(void)
     case SYS_READ:
         break;
     case SYS_OPENREADCLOSE:
-        // sel4cp_dbg_puts("SYS_OPENREADCLOSE\n");
         handle_openreadclose(request_id, rx_buf, buf_len);
-        
         break;
     default:
         break;
     }
-    // sel4cp_dbg_puts("handle_webserver_request done\n");
+
     error = enqueue_avail(&websrv_tx_ring, rx_buf, BUF_SIZE, NULL);
     if (error)
     {
         sel4cp_dbg_puts("Failed to enqueue avail to websrv_tx_ring\n");
         return;
     }
-    // sel4cp_dbg_puts("handle_webserver_request done2\n");
 }
 
 void notified(sel4cp_channel ch)
@@ -691,16 +669,12 @@ void notified(sel4cp_channel ch)
         }
         else
         {
-            // sel4cp_dbg_puts("nfs_service called\n");
             if (nfs_service(nfs, poll_lwip_socket())) {
                 sel4cp_dbg_puts("nfs_service failed\n");
             }
         }
         break;
     case WEBSRV_CH:
-        // sel4cp_dbg_puts("Got notification from websrv\n");
-        // Requesting a file
-        // TODO REMOVE
         handle_webserver_request();
         break;
     case TIMER_CH:
