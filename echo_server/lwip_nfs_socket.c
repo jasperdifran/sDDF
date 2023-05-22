@@ -35,7 +35,7 @@
 #define NFS_SOCKETS 10
 #define NFS_SOCKET_FD_OFFSET 100
 
-// #define NFS_SERVER_IP "10.13.1.90" // IP of Mac NFS server
+// #define NFS_SERVER_IP "10.13.1.90" // IP of Jasper's NFS server (when on keg)
 #define NFS_SERVER_IP "10.13.0.11" // IP of NFSHomes
 
 typedef struct
@@ -48,6 +48,8 @@ typedef struct
 } nfs_socket_t;
 
 static struct tcp_pcb *tcp_socket;
+
+// Should only need 1 at any one time, accounts for any reconnecting that might happen
 nfs_socket_t nfs_sockets[10] = {0};
 
 extern nfs_state_t nfs_state;
@@ -75,28 +77,24 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
 {
     if (p == NULL)
     {
-        sel4cp_dbg_puts("Closing connection...\n");
-        sel4cp_dbg_puts("Closing socket ");
-        // // sel4cp_dbg_puts(ip4addr_ntoa(&tpcb->remote_ip));
-        // sel4cp_dbg_puts(":");
-        // labelnum("", tpcb->remote_port);
+        write_cyan("Closing connection...\n");
         tcp_close(tpcb);
         return ERR_OK;
     }
 
     int len_to_read = p->tot_len;
-    // labelnum("len_to_read", len_to_read);
+
     int len_read = 0;
     while (len_to_read > 0)
     {
         uintptr_t data;
         unsigned int discard_len;
         void *cookie;
-        // labelnum("len_to_read", len_to_read);
+
         int error = dequeue_avail(&nfs_state.rx_ring, &data, &discard_len, &cookie);
         if (error)
         {
-            sel4cp_dbg_puts("Failed to dequeue avail from rx_ring\n");
+            write_cyan("Failed to dequeue avail from rx_ring\n");
             return ERR_OK;
         }
 
@@ -125,7 +123,6 @@ static err_t nfs_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
     write_cyan("Connected to socket!\n");
-    labelnum("fd", ((nfs_socket_t *)arg)->fd);
     ((nfs_socket_t *)arg)->connected = 1;
     tcp_sent(tpcb, nfs_socket_sent_callback);
     tcp_recv(tpcb, nfs_socket_recv_callback);
@@ -341,10 +338,7 @@ void nfs_init_sockets(void)
 {
     for (int i = 0; i < NFS_SOCKETS; i++)
     {
-        nfs_sockets[i].sock_tpcb = NULL;
         nfs_sockets[i].port = -1;
         nfs_sockets[i].fd = i + NFS_SOCKET_FD_OFFSET;
-        nfs_sockets[i].connected = 0;
-        nfs_sockets[i].used = 0;
     }
 }

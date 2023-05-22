@@ -171,9 +171,6 @@ void copy_mpybuf_to_ringbuf(void *cookie)
 
     while (bytes_written < tx_len)
     {
-        // sel4cp_dbg_puts("Copying mpybuf to ringbuf");
-        // label_num("bytes_written: ", bytes_written);
-        // label_num("tx_len: ", tx_len);
         void *tx_cookie;
         uintptr_t tx_buf;
         unsigned int temp_len;
@@ -183,7 +180,9 @@ void copy_mpybuf_to_ringbuf(void *cookie)
             sel4cp_dbg_puts("LWIP TX RING EMPTY\n");
             sel4cp_notify(LWIP_CH);
         }
-        // while (ring_empty(&lwip_tx_ring));
+        // Wait until a buffer has been made available by lwip
+        while (ring_empty(&lwip_tx_ring));
+
         int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
         {
@@ -223,7 +222,7 @@ int get_int_from_buf(char *buf, int offset)
 /**
  * @brief Request the content of a file from the NFS server. Send in the following shape
  *
- * | SYS_OPENREADCLOSE | int len_to_read | filename | '\0' |
+ * | 1 byte: SYS_OPENREADCLOSE | 4 bytes: int len_to_read | filename | '\0' |
  *
  * @param filename
  */
@@ -243,13 +242,15 @@ void req_file(const char *filename, int len_to_read)
         sel4cp_dbg_puts("Failed to dequeue avail from nfs_tx_ring\n");
         return;
     }
-    // label_num("tx_buf: ", tx_buf);
+
     int pathLen = strlen(filename);
     char *buf = (char *)tx_buf;
+
     buf[0] = SYS_OPENREADCLOSE;
     split_int_to_buf(len_to_read, buf + 1);
     memcpy(buf + 5, filename, pathLen);
     buf[pathLen + 5] = '\0';
+
     error = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 5, current_request_id);
     if (error) {
         sel4cp_dbg_puts("Failed to enqueue used to nfs_tx_ring\n");
@@ -262,22 +263,17 @@ void req_file(const char *filename, int len_to_read)
 /**
  * @brief Request the stat of a file. Sends a buf to NFS server in the following shape:
  *
- * [[1 byte command: SYS_STAT64][pathLen bytes path][1 byte null terminator]]
+ * | 1 byte command: SYS_STAT64 | pathLen bytes path | 1 byte null terminator |
  *
  * @param filename
  */
 void stat_file(const char *filename)
 {
-    // sel4cp_dbg_puts("Requesting file stat: ");
-    // sel4cp_dbg_puts(filename);
-    // sel4cp_dbg_puts("\n");
     void *discard_cookie;
     uintptr_t tx_buf;
     unsigned int buf_len;
 
     int err = dequeue_avail(&nfs_tx_ring, &tx_buf, &buf_len, &discard_cookie);
-    // label_num("tx_buf: ", tx_buf);
-    // ring_buf_dbg(&nfs_tx_ring);
     if (err) {
         sel4cp_dbg_puts("Failed to dequeue from nfs_tx_ring\n");
         return;
@@ -298,18 +294,12 @@ void stat_file(const char *filename)
 
 /** Responses from NFS
     READ: [command (1 byte), file size (4 bytes), file data (n bytes)]
-    Reads will be followed by howeer many buffers are required to hold the file
+    Reads will be followed by however many buffers are required to hold the file
     STAT: [command (1 byte), file size (4 bytes), last mod date (2 bytes), last mod time (2 bytes), is_dir (1 byte)]
 */
 
 void handle_read_response(void *rx_buf, int len, int continuation_id)
 {
-    // int numBufs = (len - 5) / BUF_SIZE;
-    // label_num("numBufs: ", numBufs);
-    // label_num("len: ", len);
-    // Store the size of the file
-    // sel4cp_dbg_puts("Got read response\n");
-    // memcpy(nfs_received_data_store, (void *)rx_buf + 5, len - 5);
 
     int len_to_read = get_int_from_buf((char *)rx_buf, 1);
     int len_read = 0;
@@ -339,10 +329,6 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
         enqueue_avail(&nfs_rx_ring, our_rx_buf, BUF_SIZE, NULL);
     }
 
-    // sel4cp_dbg_puts("Got read response\n");
-
-    // print_bright_magenta_buf(nfs_received_data_store, len_read);
-
     run_cont("readfilecont.py", 0, (void *)nfs_received_data_store, len_read, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
 }
 
@@ -358,13 +344,6 @@ void handle_stat_response(void *rx_buf, int len, int continuation_id)
     else
     {
         memcpy(nfs_received_data_store, (void *)rx_buf + 1, len);
-
-        // label_num("len: ", len);
-        // for (int i = 0; i < len; i++)
-        // {
-        //     printnum(((char *)rx_buf)[i]);
-        //     sel4cp_dbg_puts(" ");
-        // }
 
         int status = run_cont("statcont.py", 0, (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
     }
@@ -433,7 +412,6 @@ void print_bright_magenta_buf(uintptr_t buf, int len)
  */
 void handle_nfs_response()
 {
-    // sel4cp_dbg_puts("Handling nfs response\n");
     void *local_current_request_id;
     uintptr_t rx_buf;
     unsigned int buf_len;
@@ -447,7 +425,6 @@ void handle_nfs_response()
     enqueue_avail(&nfs_rx_ring, rx_buf, BUF_SIZE, NULL);
 
     current_request_id = (int)local_current_request_id;
-    // label_num("Handling nfs response for req id: ", current_request_id);
 
     request_data_t *req = &requests[current_request_id];
     int operation_id = ((char *)local_temp_buf)[0];
@@ -470,9 +447,9 @@ void handle_nfs_response()
 
     if (request_done)
     {
-        // sel4cp_dbg_puts("Continuation done\n");
+        // If the request is done, send it off to lwip
         request_done = 0;
-        // label_num("Continuation done, tx_len: ", tx_len);
+
         copy_mpybuf_to_ringbuf(req->socket_id);
         sel4cp_notify(LWIP_CH);
 
@@ -501,45 +478,28 @@ void handle_lwip_request()
         return;
     }
 
-    // sel4cp_dbg_puts("RX_COOKIE: ");
-    // print_addr(rx_cookie);
-
     /* Init a response buf and process request */
     tx_len = 0;
 
     // Find a free continuation to use. For now, assuming there is one free
     // and we know that pretty much every request will be async.
-    // sel4cp_dbg_puts("Looking for free continuation\n");
     int contInd = 0;
     while (requests[contInd].used)
         contInd++;
-    // sel4cp_dbg_puts("Found free continuation\n");
+
     request_data_t *req = &requests[contInd];
     current_request_id = contInd;
     request_done = 0;
-    // label_num("Handling run_webserver req id: ", current_request_id);
+
     req->used = 1;
     req->socket_id = rx_cookie;
 
-    // sel4cp_dbg_puts("SOCKET ID: ");
-    // print_addr(req->socket_id);
-    // sel4cp_dbg_puts("SOCKET_ID ADDR: ");
-    // print_addr(&req->socket_id);
-
-    // sel4cp_dbg_puts("Running webserver\n");
-
-    // We know that pretty much every request will be async
-    // run_webserver((char *)rx_buf, (char *)tx_data, &tx_len);
-    sel4cp_dbg_puts("Webserver about to run\n");
     int status = run_webserver((char *)rx_buf, &requests_private_data[contInd], (char *)tx_data, &tx_len);
-    sel4cp_dbg_puts("Webserver returned\n");
 
     if (request_done)
     {
-        // sel4cp_dbg_puts("Continuation done\n");
         request_done = 0;
-        // label_num("Continuation done, tx_len: ", tx_len);
-        sel4cp_dbg_puts((char *)tx_data);
+
         copy_mpybuf_to_ringbuf(rx_cookie);
         sel4cp_notify(LWIP_CH);
 
@@ -547,8 +507,6 @@ void handle_lwip_request()
         req->socket_id = NULL;
     }
     current_request_id = -1;
-
-    /* Copy response buf to ring buf */
 
     /* Release req buf */
     enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, NULL);
@@ -562,13 +520,11 @@ void notified(sel4cp_channel ch)
         /* Incoming new request packet from lwip */
         while (!ring_empty(lwip_rx_ring.used_ring))
         {
-            // sel4cp_dbg_puts("Websrv got a request from lwip\n");
             handle_lwip_request();
         }
         break;
     case NFS_CH:;
         /* Continuation of a request */
-        // sel4cp_dbg_puts("Websrv got a reponse from NFS CH\n");
         handle_nfs_response();
         break;
 
