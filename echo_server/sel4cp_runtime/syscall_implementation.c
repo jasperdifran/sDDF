@@ -131,6 +131,7 @@ void labelnum(char *s, uint64_t n)
 static size_t output(void *data, size_t count)
 {
     imx8mm_output_strn((char *)data, count);
+    return count;
 }
 
 long sys_brk(va_list ap)
@@ -407,7 +408,6 @@ long sys_writev(va_list ap)
             ret += output(iov[i].iov_base, iov[i].iov_len);
         }
     }
-
     return ret;
 }
 
@@ -628,7 +628,6 @@ long sel4_vsyscall(long sysnum, ...)
     va_start(al, sysnum);
     muslcsys_syscall_t syscall;
 
-    // labelnum("syscall: ", sysnum);
     if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table))
     {
         // debug_error(sysnum);

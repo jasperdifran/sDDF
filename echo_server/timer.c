@@ -44,7 +44,7 @@ pid_t my_pid = LWIP_PID;
 int timers_initialised = 0;
 
 int lwip_timeout_counter = 0;
-int lwip_timeout_goal = 3;
+int lwip_timeout_goal = 1;
 
 void write_bright_green(const char *str)
 {
