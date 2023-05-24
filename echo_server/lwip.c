@@ -508,6 +508,7 @@ void notified(sel4cp_channel ch)
         return;
     case LWIP_NFS_CH:
         nfs_socket_process_tx();
+        sys_check_timeouts();
         return;
     default:
         sel4cp_dbg_puts("lwip: received notification on unexpected channel\n");
