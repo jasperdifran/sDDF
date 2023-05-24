@@ -51,7 +51,8 @@ typedef struct
     uint8_t is_dir;
 } mpy_stat_t;
 
-typedef struct {
+typedef struct
+{
     int idx;
     int request_id;
     int len_to_read;
@@ -110,7 +111,7 @@ void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *priv
 void init_post(void)
 {
     sel4cp_dbg_puts("init_post: starting nfs client\n");
-    
+
     nfs = nfs_init_context();
 
     if (nfs == NULL)
@@ -223,11 +224,11 @@ void writenum(int num)
     }
 }
 
-
 static void __nfs_send_to_lwip(int fd, void *buffer, size_t len)
 {
     char *buf = (char *)buffer;
     unsigned int bytes_written = 0;
+    // print_bright_green_buf(buffer, len);
 
     while (bytes_written < len)
     {
@@ -297,13 +298,15 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
         int error = dequeue_used(&lwip_rx_ring, &rx_buf, &temp_len, &rx_cookie);
         if (error)
         {
-            sel4cp_dbg_puts("Failed to dequeue used from lwip_rx_ring\n");
             sel4cp_notify(LWIP_NFS_CH);
             errcount++;
-            if (errcount > 10) return 0;
-            else continue;
-            return 0;
-        } else {
+            if (errcount > 10)
+                return bytes_read;
+            else
+                continue;
+        }
+        else
+        {
             errcount = 0;
         }
 
@@ -315,7 +318,7 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
         }
         bytes_read += bytes_to_read;
 
-        // More in the buffer than NFS is requesting. Fill our socket_buf with what's left. Will be 
+        // More in the buffer than NFS is requesting. Fill our socket_buf with what's left. Will be
         // at most BUF_SIZE - 1 bytes
         if (temp_len > bytes_to_read)
         {
@@ -339,8 +342,8 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
 
 /**
  * @brief Flushes the open lwip socket
- * 
- * @return size_t 
+ *
+ * @return size_t
  */
 static size_t __nfs_close_lwip_sock()
 {
@@ -484,8 +487,6 @@ static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data,
     }
 }
 
-
-
 void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
     if (status != 0)
@@ -493,7 +494,7 @@ void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *p
         sel4cp_dbg_puts("nfs_close_async_cb: failed to close file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        // TODO return 500, or fail and free everything? At this point all required data 
+        // TODO return 500, or fail and free everything? At this point all required data
         // for the request has been send to websrv)
     }
     else
@@ -517,9 +518,11 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts(data);
         sel4cp_dbg_puts("\n");
         send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
-    } else {
-        // Now we send the data back to the webserver 
-        // We need to send back the command ID and how many bytes we read first, they should be stuck onto the 
+    }
+    else
+    {
+        // Now we send the data back to the webserver
+        // We need to send back the command ID and how many bytes we read first, they should be stuck onto the
         // front of the first buffer.
         void *cookie_continuation_id;
         uintptr_t rx_buf;
@@ -536,7 +539,6 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
             return;
         }
 
-
         // Set first bit to id of op
         ((char *)rx_buf)[0] = SYS_OPENREADCLOSE;
 
@@ -551,7 +553,8 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         len_to_be_sent -= send_this_round;
 
         error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round + 5, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
-        if (error) {
+        if (error)
+        {
             sel4cp_dbg_puts("Failed to enqueue used to websrv_rx_ring\n");
             send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
             return;
@@ -586,7 +589,6 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
     }
 }
 
-
 void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
     nfs_openreadclose_data_t *request_data = (nfs_openreadclose_data_t *)private_data;
@@ -596,7 +598,9 @@ void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
         send_websrv_error(request_data->request_id, 404);
-    } else {
+    }
+    else
+    {
         request_data->file_handle = (struct nfsfh *)data;
         nfs_read_async(nfs, (struct nfsfh *)data, request_data->len_to_read, nfs_read_async_cb, private_data);
     }
@@ -612,9 +616,11 @@ int get_int_from_buf(char *buf, int offset)
     return ret;
 }
 
-void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_len) {
+void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_len)
+{
     int i = 0;
-    while (i < max_open_files && nfs_openreadclose_data[i] != NULL && nfs_openreadclose_data[i]->used) {
+    while (i < max_open_files && nfs_openreadclose_data[i] != NULL && nfs_openreadclose_data[i]->used)
+    {
         i++;
     }
 
@@ -623,14 +629,19 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
     {
         max_open_files *= 2;
         void *new = realloc(nfs_openreadclose_data, sizeof(nfs_openreadclose_data_t *) * max_open_files);
-        if (new == NULL) {
+        if (new == NULL)
+        {
             send_websrv_error(request_id, 500);
             return;
-        } else {
+        }
+        else
+        {
             nfs_openreadclose_data = new;
         }
         nfs_openreadclose_data[i] = malloc(sizeof(nfs_openreadclose_data_t));
-    } else if (nfs_openreadclose_data[i] == NULL) {
+    }
+    else if (nfs_openreadclose_data[i] == NULL)
+    {
         nfs_openreadclose_data[i] = malloc(sizeof(nfs_openreadclose_data_t));
     }
 
@@ -701,7 +712,8 @@ void notified(sel4cp_channel ch)
         }
         else
         {
-            if (nfs_service(nfs, poll_lwip_socket())) {
+            if (nfs_service(nfs, poll_lwip_socket()))
+            {
                 sel4cp_dbg_puts("nfs_service failed\n");
             }
         }
@@ -712,7 +724,8 @@ void notified(sel4cp_channel ch)
     case TIMER_CH:
         if (nfs_socket_connected)
         {
-            if (nfs_service(nfs, poll_lwip_socket())) {
+            if (nfs_service(nfs, poll_lwip_socket()))
+            {
                 sel4cp_dbg_puts("timer: nfs_service failed\n");
             }
         }
