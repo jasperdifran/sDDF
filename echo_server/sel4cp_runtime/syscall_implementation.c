@@ -260,56 +260,23 @@ long sys_mmap(va_list ap)
 {
     void *addr = va_arg(ap, void *);
     size_t length = va_arg(ap, size_t);
-    // if (length == 0)
-    //     length = 0x1000; // Default to 4K
     int prot = va_arg(ap, int);
     int flags = va_arg(ap, int);
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
     (void)fd, (void)offset, (void)prot, (void)addr;
-    // labelnum_red("sys_mmap addr: ", addr);
-    // labelnum_red("sys_mmap length: ", length);
-    // labelnum_red("sys_mmap prot: ", prot);
-    // labelnum_red("sys_mmap flags: ", flags);
-    // print_sys_mmap_flags(flags);
-    // labelnum_red("sys_mmap fd: ", fd);
-    // labelnum_red("sys_mmap offset: ", offset);
-    // labelnum_red("sys_mmap morecore_top: ", morecore_top);
-    // labelnum_red("sys_mmap morecore_base: ", morecore_base);
 
     if (flags & MAP_ANONYMOUS)
     {
         /* Check that we don't try and allocate more than exists */
         if (length > morecore_top - morecore_base)
         {
-            // write_red("sys_mmap MAP_ANONYMOUS out of mem\n");
             return -ENOMEM;
         }
-
-        // if (flags & MAP_FIXED)
-        // {
-        //     /* Fixed allocation */
-        //     // if (addr < morecore_base || addr + length > morecore_top)
-        //     // {
-        //     // write_red("AHHH TRYING TO MAP_FIXED\n");
-        //     //     return -ENOMEM;
-        //     // }
-        //     // return align_addr(addr);
-        // }
-        // else if (flags & MAP_GROWSDOWN)
-        // {
-        //     /* Allocate from the bottom */
-        //     void *ret = morecore_base;
-        //     morecore_base += length;
-        //     return ret;
-        // }
-        // else
         /* Steal from the top */
-        // morecore_top -= length;
-        morecore_top = morecore_top - length;
+        morecore_top -= length;
         return morecore_top;
     }
-    // sel4cp_dbg_puts("sys_mmap out of mem\n");
     return -ENOMEM;
 }
 
@@ -532,57 +499,6 @@ long sys_sendto(va_list ap)
 
     return (long)len;
 }
-/*
-void print_sys_recvfrom_flags(int flags) 
-{
-    sel4cp_dbg_puts("Flags: ");
-    if (flags & MSG_PEEK) {
-        sel4cp_dbg_puts("MSG_PEEK ");
-    } 
-    if (flags & MSG_OOB) {
-        sel4cp_dbg_puts("MSG_OOB ");
-    }
-    if (flags & MSG_WAITALL) {
-        sel4cp_dbg_puts("MSG_WAITALL ");
-    }
-    if (flags & MSG_DONTWAIT) {
-        sel4cp_dbg_puts("MSG_DONTWAIT ");
-    }
-    if (flags & MSG_EOR) {
-        sel4cp_dbg_puts("MSG_EOR ");
-    }
-    if (flags & MSG_TRUNC) {
-        sel4cp_dbg_puts("MSG_TRUNC ");
-    }
-    if (flags & MSG_CTRUNC) {
-        sel4cp_dbg_puts("MSG_CTRUNC ");
-    }
-    if (flags & MSG_ERRQUEUE) {
-        sel4cp_dbg_puts("MSG_ERRQUEUE ");
-    }
-    if (flags & MSG_NOSIGNAL) {
-        sel4cp_dbg_puts("MSG_NOSIGNAL ");
-    }
-    if (flags & MSG_MORE) {
-        sel4cp_dbg_puts("MSG_MORE ");
-    }
-    if (flags & MSG_WAITFORONE) {
-        sel4cp_dbg_puts("MSG_WAITFORONE ");
-    }
-    if (flags & MSG_BATCH) {
-        sel4cp_dbg_puts("MSG_BATCH ");
-    }
-    if (flags & MSG_ZEROCOPY) {
-        sel4cp_dbg_puts("MSG_ZEROCOPY ");
-    }
-    if (flags & MSG_FASTOPEN) {
-        sel4cp_dbg_puts("MSG_FASTOPEN ");
-    }
-    if (flags & MSG_CMSG_CLOEXEC) {
-        sel4cp_dbg_puts("MSG_CMSG_CLOEXEC ");
-    }
-    sel4cp_dbg_puts("\n");
-}*/
 
 long sys_recvfrom(va_list ap)
 {
@@ -593,19 +509,12 @@ long sys_recvfrom(va_list ap)
     struct sockaddr *src_addr = va_arg(ap, struct sockaddr *);
     socklen_t *addrlen = va_arg(ap, socklen_t *);
 
-    // labelnum_red("\n recvfrom: flags", flags);
-    // print_sys_recvfrom_flags(flags);
-
-    // sel4cp_dbg_puts("Trying to recv from nfs\n");
     size_t read = 0;
     if (nfs_recv_from_lwip != NULL)
     {
         read = nfs_recv_from_lwip(sockfd, buf, len);
     }
-
-    // labelnum("recvfrom bytes read: ", read);
-    // labelnum("recvfrom len: ", len);
-
+    
     return (long)read;
 }
 
@@ -630,7 +539,7 @@ long sel4_vsyscall(long sysnum, ...)
 
     if (sysnum < 0 || sysnum >= ARRAY_SIZE(syscall_table))
     {
-        // debug_error(sysnum);
+        debug_error(sysnum);
         return -ENOSYS;
     }
     else

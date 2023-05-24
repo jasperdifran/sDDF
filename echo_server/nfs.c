@@ -31,9 +31,6 @@
 // #define EXPORT "/System/Volumes/Data/Users/jasperdifrancesco/export/imx8mm"
 // #define EXPORT "/Users/jasperdifrancesco/export"
 
-#define NFSFILE "foo"
-#define NFSFILE2 "otherfile"
-
 typedef struct
 {
     struct nfsfh *nfsfh;
@@ -67,8 +64,8 @@ extern socket_send_t nfs_send_to_lwip;
 extern socket_recv_t nfs_recv_from_lwip;
 extern socket_close_t nfs_close_lwip_sock;
 
-// nfs_open_file_t nfs_open_files[NUM_OPEN_FILES] = {0};
-nfs_openreadclose_data_t nfs_openreadclose_data[NUM_OPEN_FILES] = {0};
+nfs_openreadclose_data_t **nfs_openreadclose_data = NULL;
+int max_open_files = 16;
 
 struct pollfd pfds[2]; /* nfs:0  mount:1 */
 struct nfs_context *nfs;
@@ -616,20 +613,29 @@ int get_int_from_buf(char *buf, int offset)
 
 void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_len) {
     int i = 0;
-    while (nfs_openreadclose_data[i].used) {
+    while (i < max_open_files && nfs_openreadclose_data[i] != NULL && nfs_openreadclose_data[i]->used) {
         i++;
     }
 
-    // TODO Should not be capped at NUM_OPEN_FILES
-    if (i == NUM_OPEN_FILES) {
-        sel4cp_dbg_puts("handle_openreadclose: no free slots\n");
-        send_websrv_error((int)request_id, 500);
-        return;
+    /* Note we don't free pointers to nfs_openreadclose_data_t structs as we can reuse them */
+    if (i == max_open_files)
+    {
+        max_open_files *= 2;
+        void *new = realloc(nfs_openreadclose_data, sizeof(nfs_openreadclose_data_t *) * max_open_files);
+        if (new == NULL) {
+            send_websrv_error(request_id, 500);
+            return;
+        } else {
+            nfs_openreadclose_data = new;
+        }
+        nfs_openreadclose_data[i] = malloc(sizeof(nfs_openreadclose_data_t));
+    } else if (nfs_openreadclose_data[i] == NULL) {
+        nfs_openreadclose_data[i] = malloc(sizeof(nfs_openreadclose_data_t));
     }
 
-    nfs_openreadclose_data[i].used = 1;
-    nfs_openreadclose_data[i].request_id = request_id;
-    nfs_openreadclose_data[i].len_to_read = get_int_from_buf((char *)rx_buf, 1);
+    nfs_openreadclose_data[i]->used = 1;
+    nfs_openreadclose_data[i]->request_id = request_id;
+    nfs_openreadclose_data[i]->len_to_read = get_int_from_buf((char *)rx_buf, 1);
 
     sel4cp_dbg_puts((char *)rx_buf + 5);
     sel4cp_dbg_puts("\n");
@@ -741,8 +747,7 @@ void init(void)
         enqueue_avail(&websrv_tx_ring, shared_nfs_websrv_vaddr + (BUF_SIZE * (i + NUM_BUFFERS)), BUF_SIZE, NULL);
     }
 
-    for (int i = 0; i < NUM_OPEN_FILES; i++)
-    {
-        nfs_openreadclose_data[i].idx = i;
-    }
+    nfs_openreadclose_data = malloc(sizeof(nfs_openreadclose_data_t *) * max_open_files);
+    for (int i = 0; i < max_open_files; i++)
+        nfs_openreadclose_data[i] = NULL;
 }
