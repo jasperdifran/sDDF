@@ -130,6 +130,20 @@ void init_post(void)
     sel4cp_dbg_puts("init: connecting to nfs server\n");
 }
 
+/**
+ * @brief UTIL function to split an int into four chars
+ *
+ * @param num
+ * @param buf
+ */
+void split_int_to_buf(int num, char *buf)
+{
+    buf[0] = (num >> 24) & 0xFF;
+    buf[1] = (num >> 16) & 0xFF;
+    buf[2] = (num >> 8) & 0xFF;
+    buf[3] = num & 0xFF;
+}
+
 void write_num(int num)
 {
     char buf[10];
@@ -289,7 +303,7 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
             sel4cp_dbg_puts("Failed to dequeue used from lwip_rx_ring\n");
             sel4cp_notify(LWIP_NFS_CH);
             errcount++;
-            if (errcount > 5) return 0;
+            if (errcount > 10) return 0;
             else continue;
             return 0;
         } else {
@@ -351,6 +365,29 @@ static size_t __nfs_close_lwip_sock()
         enqueue_avail(&lwip_rx_ring, rx_buf, BUF_SIZE, 0);
     }
     return 0;
+}
+
+void send_websrv_error(int request_id, int error)
+{
+    void *cookie_continuation_id;
+    uintptr_t rx_buf;
+    unsigned int buf_len;
+
+    if (dequeue_avail(&websrv_rx_ring, &rx_buf, &buf_len, &cookie_continuation_id))
+    {
+        sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
+        return;
+    }
+
+    ((char *)rx_buf)[0] = SYS_ERROR;
+    split_int_to_buf(error, (char *)rx_buf + 1);
+
+    if (enqueue_used(&websrv_rx_ring, rx_buf, sizeof(int) + 1, (uintptr_t)request_id))
+    {
+        sel4cp_dbg_puts("Failed to enqueue used to websrv_tx_ring\n");
+        return;
+    }
+    sel4cp_notify(WEBSRV_CH);
 }
 
 int poll_lwip_socket(void)
@@ -450,19 +487,7 @@ static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data,
     }
 }
 
-/**
- * @brief UTIL function to split an int into four chars
- * 
- * @param num 
- * @param buf 
- */
-void split_int_to_buf(int num, char *buf)
-{
-    buf[0] = (num >> 24) & 0xFF;
-    buf[1] = (num >> 16) & 0xFF;
-    buf[2] = (num >> 8) & 0xFF;
-    buf[3] = num & 0xFF;
-}
+
 
 void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
@@ -472,7 +497,7 @@ void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *p
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
         // TODO return 500, or fail and free everything? At this point all required data 
-        // for the request has been send to websrv
+        // for the request has been send to websrv)
     }
     else
     {
@@ -494,7 +519,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts("\n");
         sel4cp_dbg_puts(data);
         sel4cp_dbg_puts("\n");
-        // TODO return to webserver with 500
+        send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
     } else {
         // Now we send the data back to the webserver 
         // We need to send back the command ID and how many bytes we read first, they should be stuck onto the 
@@ -510,7 +535,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         if (error)
         {
             sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
-            // TODO return to webserver with 500
+            send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
             return;
         }
 
@@ -531,7 +556,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round + 5, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
         if (error) {
             sel4cp_dbg_puts("Failed to enqueue used to websrv_rx_ring\n");
-            // TODO return to webserver with 500
+            send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
             return;
         }
 
@@ -541,7 +566,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
             if (error)
             {
                 sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
-                // TODO return to webserver with 500
+                send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
                 return;
             }
 
@@ -553,7 +578,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
             if (error)
             {
                 sel4cp_dbg_puts("Failed to enqueue used to websrv_tx_ring\n");
-                // TODO return to webserver with 500
+                send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
                 return;
             }
             len_to_be_sent -= send_this_round;
@@ -572,7 +597,7 @@ void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         sel4cp_dbg_puts("nfs_open_async_cb: failed to open file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        // TODO return to webserver with 404
+        send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 404);
     } else {
         ((nfs_openreadclose_data_t *)private_data)->file_handle = (struct nfsfh *)data;
         nfs_read_async(nfs, (struct nfsfh *)data, ((nfs_openreadclose_data_t *)private_data)->len_to_read, nfs_read_async_cb, private_data);
@@ -598,7 +623,7 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
     // TODO Should not be capped at NUM_OPEN_FILES
     if (i == NUM_OPEN_FILES) {
         sel4cp_dbg_puts("handle_openreadclose: no free slots\n");
-        // TODO return to webserver with 500 error
+        send_websrv_error((int)request_id, 500);
         return;
     }
 
@@ -625,6 +650,9 @@ void handle_webserver_request(void)
         sel4cp_dbg_puts("Failed to dequeue used from websrv_tx_ring\n");
         return;
     }
+
+    send_websrv_error((int)request_id, 500);
+    return;
 
     // The first byte of the buffer gives us the file operation they are going for
     int op = ((char *)rx_buf)[0];
