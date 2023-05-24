@@ -651,9 +651,6 @@ void handle_webserver_request(void)
         return;
     }
 
-    send_websrv_error((int)request_id, 500);
-    return;
-
     // The first byte of the buffer gives us the file operation they are going for
     int op = ((char *)rx_buf)[0];
     switch (op)
