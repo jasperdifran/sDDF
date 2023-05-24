@@ -76,17 +76,17 @@ static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZ
    returns 0 if failure, returns newbrk if success.
 */
 
-int errnovar = 0;
+// int errnovar = 0;
 
-int *__error()
-{
-    return &errnovar;
-}
+// int *__error()
+// {
+//     return &errnovar;
+// }
 
-int *___errno_location(void)
-{
-    return __error();
-}
+// int *___errno_location(void)
+// {
+//     return __error();
+// }
 
 // int *__errno_location(void)
 // {
@@ -513,6 +513,10 @@ long sys_recvfrom(va_list ap)
     if (nfs_recv_from_lwip != NULL)
     {
         read = nfs_recv_from_lwip(sockfd, buf, len);
+    }
+    if (read == 0 && flags & MSG_DONTWAIT) {
+
+        return -EAGAIN;
     }
     
     return (long)read;
