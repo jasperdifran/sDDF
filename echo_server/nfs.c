@@ -589,15 +589,16 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
 
 void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
+    nfs_openreadclose_data_t *request_data = (nfs_openreadclose_data_t *)private_data;
     if (status != 0)
     {
         sel4cp_dbg_puts("nfs_open_async_cb: failed to open file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 404);
+        send_websrv_error(request_data->request_id, 404);
     } else {
-        ((nfs_openreadclose_data_t *)private_data)->file_handle = (struct nfsfh *)data;
-        nfs_read_async(nfs, (struct nfsfh *)data, ((nfs_openreadclose_data_t *)private_data)->len_to_read, nfs_read_async_cb, private_data);
+        request_data->file_handle = (struct nfsfh *)data;
+        nfs_read_async(nfs, (struct nfsfh *)data, request_data->len_to_read, nfs_read_async_cb, private_data);
     }
 }
 
@@ -640,7 +641,7 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
     sel4cp_dbg_puts((char *)rx_buf + 5);
     sel4cp_dbg_puts("\n");
 
-    nfs_open_async(nfs, (char *)rx_buf + 5, O_RDONLY, nfs_open_async_cb, (void *)&nfs_openreadclose_data[i]);
+    nfs_open_async(nfs, (char *)rx_buf + 5, O_RDONLY, nfs_open_async_cb, (void *)nfs_openreadclose_data[i]);
 }
 
 void handle_webserver_request(void)
