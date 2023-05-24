@@ -111,6 +111,7 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
 
     sel4cp_notify(LWIP_NFS_CH);
     tcp_recved(tpcb, p->tot_len);
+    pbuf_free(p);
     return ERR_OK;
 }
 
@@ -214,6 +215,7 @@ int nfs_socket_create(void)
     int i = 512;
     while (tcp_bind(freeSocket->sock_tpcb, IP_ADDR_ANY, i) != ERR_OK)
         i++;
+    labelnum("Bound outgoing sock to port", i);
     return freeSocket->fd;
 }
 

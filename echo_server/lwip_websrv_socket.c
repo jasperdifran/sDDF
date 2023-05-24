@@ -62,6 +62,11 @@ void label_num(char *s, int n)
     sel4cp_dbg_puts("\n");
 }
 
+void websrv_socket_err_func(void *arg, err_t err)
+{
+    printf("ERROR: lwip_websrv_socket.c %d\n", err);
+}
+
 /**
  * @brief Echos for now. Must be adjusted to loop through linked list of struct pbuf.
  *
@@ -98,6 +103,7 @@ static err_t websrv_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct
 
     sel4cp_notify(WEBSRV_CH);
     tcp_recved(tpcb, p->tot_len);
+    pbuf_free(p);
     return ERR_OK;
 }
 
@@ -190,8 +196,9 @@ static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, er
     {
         sel4cp_dbg_puts("newpcb == NULL\n");
         label_num("Err num: ", err);
-        // return ERR_OK;
+        return ERR_OK;
     }
+    tcp_err(newpcb, websrv_socket_err_func);
     tcp_sent(newpcb, websrv_socket_sent_callback);
     tcp_recv(newpcb, websrv_socket_recv_callback);
     return ERR_OK;
@@ -200,6 +207,7 @@ static err_t websrv_socket_accept_callback(void *arg, struct tcp_pcb *newpcb, er
 int websrv_setup_tcp_socket(void)
 {
     tcp_socket = tcp_new_ip_type(IPADDR_TYPE_V4);
+    tcp_err(tcp_socket, websrv_socket_err_func);
     if (tcp_socket == NULL)
     {
         sel4cp_dbg_puts("Failed to open a socket for listening!\n");
