@@ -10,11 +10,14 @@
 #define BENCH_PID 6
 #define TIMER_PID 7
 
-#define SYS_STAT64 1
-#define SYS_OPEN 2
-#define SYS_CLOSE 3
-#define SYS_READ 4
-#define SYS_OPENREADCLOSE 5
+#define SYS_ERROR 1
+#define SYS_STAT64 2
+#define SYS_OPEN 3
+#define SYS_CLOSE 4
+#define SYS_READ 5
+#define SYS_OPENREADCLOSE 6
+
+#define INTERNAL_SERVER_ERROR 500
 
 extern void *__sysinfo;
 

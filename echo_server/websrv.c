@@ -349,6 +349,13 @@ void handle_stat_response(void *rx_buf, int len, int continuation_id)
     }
 }
 
+void handle_error_response(void *rx_buf, int len, int continuation_id)
+{
+    int error = get_int_from_buf((char *)rx_buf, 1);
+    label_num("error", error);
+    run_cont("errorcont.py", error, (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
+}
+
 void char_to_hex(char c, char *buf)
 {
     char *hex = "0123456789ABCDEF";
@@ -433,6 +440,9 @@ void handle_nfs_response()
     request_done = 0;
     switch (operation_id)
     {
+    case SYS_ERROR:
+        handle_error_response((char *)local_temp_buf, buf_len, (int)current_request_id);
+        break;
     case SYS_STAT64:
         handle_stat_response((char *)local_temp_buf, buf_len, (int)current_request_id);
         break;
