@@ -228,11 +228,6 @@ int get_int_from_buf(char *buf, int offset)
  */
 void req_file(const char *filename, int len_to_read)
 {
-    // sel4cp_dbg_puts("Requesting file: ");
-    // sel4cp_dbg_puts(filename);
-    // sel4cp_dbg_puts("\n");
-    // label_num("len_to_read: ", len_to_read);
-
     void *discard_cookie;
     uintptr_t tx_buf;
     unsigned int buf_len;
@@ -251,7 +246,7 @@ void req_file(const char *filename, int len_to_read)
     memcpy(buf + 5, filename, pathLen);
     buf[pathLen + 5] = '\0';
 
-    error = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 5, current_request_id);
+    error = enqueue_used(&nfs_tx_ring, tx_buf, MIN(pathLen + 6, BUF_SIZE), current_request_id);
     if (error) {
         sel4cp_dbg_puts("Failed to enqueue used to nfs_tx_ring\n");
         return;
@@ -283,7 +278,7 @@ void stat_file(const char *filename)
     buf[0] = SYS_STAT64;
     memcpy(buf + 1, filename, pathLen);
     buf[pathLen + 1] = '\0';
-    err = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 1, current_request_id);
+    err = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 2, current_request_id);
     if (err) {
         sel4cp_dbg_puts("Failed to enqueue used to nfs_tx_ring\n");
         return;
@@ -314,19 +309,19 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
     while (len_to_read > 0) {
         // Wait for the next buffer
         void *discard_cookie;
-        uintptr_t our_rx_buf;
+        uintptr_t temp_rx_buf;
         unsigned int buf_len;
-        int error = dequeue_used(&nfs_rx_ring, &our_rx_buf, &buf_len, &discard_cookie);
+        int error = dequeue_used(&nfs_rx_ring, &temp_rx_buf, &buf_len, &discard_cookie);
         if (error)
         {
             sel4cp_dbg_puts("Failed to dequeue avail from nfs_rx_ring\n");
             return;
         }
         int read_this_round = MIN(len_to_read, buf_len);
-        memcpy(nfs_received_data_store + len_read, (void *)our_rx_buf, read_this_round);
+        memcpy(nfs_received_data_store + len_read, (void *)temp_rx_buf, read_this_round);
         len_read += read_this_round;
         len_to_read -= read_this_round;
-        enqueue_avail(&nfs_rx_ring, our_rx_buf, BUF_SIZE, NULL);
+        enqueue_avail(&nfs_rx_ring, temp_rx_buf, BUF_SIZE, NULL);
     }
 
     run_cont("readfilecont.py", 0, (void *)nfs_received_data_store, len_read, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
@@ -335,18 +330,12 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
 void handle_stat_response(void *rx_buf, int len, int continuation_id)
 {
     sel4cp_dbg_puts("Got stat response\n");
-    if (len == 2)
-    {
-        // We know we just got a command byte and a status byte
-        sel4cp_dbg_puts("File not found\n");
-        int status = run_cont("statcont.py", 1, (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
-    }
-    else
-    {
+    if (len != 2) {
+        printf("File found\n");
         memcpy(nfs_received_data_store, (void *)rx_buf + 1, len);
-
-        int status = run_cont("statcont.py", 0, (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
     }
+    int status = run_cont("statcont.py", (len == 2), (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
+    
 }
 
 void handle_error_response(void *rx_buf, int len, int continuation_id)
