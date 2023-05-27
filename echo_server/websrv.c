@@ -132,38 +132,6 @@ void init(void)
     }
 }
 
-void printnum(int num)
-{
-    char buf[10];
-    int i = 0;
-    if (num == 0)
-    {
-        sel4cp_dbg_putc('0');
-        return;
-    }
-    while (num > 0)
-    {
-        buf[i] = num % 10 + '0';
-        num /= 10;
-        i++;
-    }
-    // reverse buf
-    for (int j = 0; j < i / 2; j++)
-    {
-        char tmp = buf[j];
-        buf[j] = buf[i - j - 1];
-        buf[i - j - 1] = tmp;
-    }
-    buf[i] = '\0';
-    sel4cp_dbg_puts(buf);
-}
-void label_num(char *s, int n)
-{
-    sel4cp_dbg_puts(s);
-    printnum(n);
-    sel4cp_dbg_puts("\n");
-}
-
 void copy_mpybuf_to_ringbuf(void *cookie)
 {
     /* Split response buf up into ring buf buffers */
@@ -177,11 +145,9 @@ void copy_mpybuf_to_ringbuf(void *cookie)
 
         if (ring_empty(lwip_tx_ring.avail_ring))
         {
-            sel4cp_dbg_puts("LWIP TX RING EMPTY\n");
+            // lwip pd has a higher prio, if we notify it will for sure free up some buffers
             sel4cp_notify(LWIP_CH);
         }
-        // Wait until a buffer has been made available by lwip
-        // while (ring_empty(&lwip_tx_ring));
 
         int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
@@ -329,9 +295,8 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
 
 void handle_stat_response(void *rx_buf, int len, int continuation_id)
 {
-    sel4cp_dbg_puts("Got stat response\n");
     if (len != 2) {
-        printf("File found\n");
+        // File has been found, copy over the stat results
         memcpy(nfs_received_data_store, (void *)rx_buf + 1, len);
     }
     int status = run_cont("statcont.py", (len == 2), (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
@@ -341,65 +306,7 @@ void handle_stat_response(void *rx_buf, int len, int continuation_id)
 void handle_error_response(void *rx_buf, int len, int continuation_id)
 {
     int error = get_int_from_buf((char *)rx_buf, 1);
-    label_num("error", error);
     run_cont("errorcont.py", error, (void *)nfs_received_data_store, len, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
-}
-
-void char_to_hex(char c, char *buf)
-{
-    char *hex = "0123456789ABCDEF";
-    buf[0] = hex[(c >> 4) & 0xF];
-    buf[1] = hex[c & 0xF];
-}
-
-void print_addr(void *ptr)
-{
-    uintptr_t addr = (uintptr_t)ptr;
-    char hex[16];
-    for (int i = 0; i < sizeof(void *); i++)
-    {
-        char_to_hex((addr >> (i * 8)) & 0xff, hex + (i * 2));
-    }
-    sel4cp_dbg_puts(hex);
-    sel4cp_dbg_puts("\n");
-}
-
-void print_buf(uintptr_t buf)
-{
-    print_buf_len(buf, 2048);
-}
-
-void print_buf_len(uintptr_t buf, int len)
-{
-    int zeroes = 0;
-    for (int i = 0; i < len; i++)
-    {
-        char c = ((char *)buf)[i];
-        char hex[2];
-        // if (c == 0)
-        // {
-        //     zeroes++;
-        //     if (zeroes > 10)
-        //     {
-        //         break;
-        //     }
-        // }
-        // else
-        // {
-        //     zeroes = 0;
-        // }
-        char_to_hex(c, hex);
-        sel4cp_dbg_putc(hex[0]);
-        sel4cp_dbg_putc(hex[1]);
-        sel4cp_dbg_putc(' ');
-    }
-}
-
-void print_bright_magenta_buf(uintptr_t buf, int len)
-{
-    sel4cp_dbg_puts("\033[1;35m");
-    print_buf_len(buf, len);
-    sel4cp_dbg_puts("\033[0m\n");
 }
 
 /**
@@ -408,7 +315,6 @@ void print_bright_magenta_buf(uintptr_t buf, int len)
  */
 void handle_nfs_response()
 {
-    sel4cp_dbg_puts("Got NFS response\n");
     void *local_current_request_id;
     uintptr_t rx_buf;
     unsigned int buf_len;
@@ -439,9 +345,7 @@ void handle_nfs_response()
         handle_read_response((char *)local_temp_buf, buf_len, (int)current_request_id);
         break;
     default:
-        sel4cp_dbg_puts("Unknown operation id: ");
-        printnum(operation_id);
-        sel4cp_dbg_puts("\n");
+        printf("Unknown operation id: %d\n", operation_id);
         break;
     }
 

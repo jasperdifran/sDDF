@@ -47,12 +47,6 @@ socket_send_t nfs_send_to_lwip = NULL;
 socket_recv_t nfs_recv_from_lwip = NULL;
 socket_close_t nfs_close_lwip_sock = NULL;
 
-// {
-//     sel4cp_dbg_puts("\033[36m");
-//     sel4cp_dbg_puts(str);
-//     sel4cp_dbg_puts("\033[0m");
-// }
-
 static muslcsys_syscall_t syscall_table[MUSLC_NUM_SYSCALLS] = {0};
 
 long sel4_vsyscall(long sysnum, ...);
@@ -76,57 +70,6 @@ static uintptr_t morecore_top = (uintptr_t)&morecore_area[MORECORE_AREA_BYTE_SIZ
    returns 0 if failure, returns newbrk if success.
 */
 
-// int errnovar = 0;
-
-// int *__error()
-// {
-//     return &errnovar;
-// }
-
-// int *___errno_location(void)
-// {
-//     return __error();
-// }
-
-// int *__errno_location(void)
-// {
-//     return __error();
-// }
-
-void print_num(uint64_t num)
-{
-    char buf[10];
-    int i = 0;
-    if (num == 0)
-    {
-        sel4cp_dbg_putc('0');
-        return;
-    }
-    while (num > 0)
-    {
-        buf[i] = num % 10 + '0';
-        num /= 10;
-        i++;
-    }
-    // reverse buf
-    for (int j = 0; j < i / 2; j++)
-    {
-        char tmp = buf[j];
-        buf[j] = buf[i - j - 1];
-        buf[i - j - 1] = tmp;
-    }
-    buf[i] = '\0';
-    sel4cp_dbg_puts(buf);
-}
-
-void labelnum(char *s, uint64_t n)
-{
-    sel4cp_dbg_puts(s);
-    sel4cp_dbg_puts(": ");
-    sel4cp_dbg_puts((n < 0) ? "-" : "");
-    print_num((n < 0) ? -n : n);
-    sel4cp_dbg_puts("\n");
-}
 
 static size_t output(void *data, size_t count)
 {
@@ -136,7 +79,6 @@ static size_t output(void *data, size_t count)
 
 long sys_brk(va_list ap)
 {
-    sel4cp_dbg_puts("sys_brk\n");
     uintptr_t ret;
     uintptr_t newbrk = va_arg(ap, uintptr_t);
 
@@ -156,100 +98,6 @@ long sys_brk(va_list ap)
 
     return ret;
 }
-
-void write_red(char *s);
-
-void labelnum_red(char *s, uint64_t n)
-{
-    sel4cp_dbg_puts("\033[31m");
-    sel4cp_dbg_puts(s);
-    sel4cp_dbg_puts(": ");
-    print_num(n);
-    sel4cp_dbg_puts("\033[0m\n");
-}
-
-/*
-void print_sys_mmap_flags(int flags)
-{
-    if (flags & MAP_SHARED)
-    {
-        flags &= ~MAP_SHARED;
-        write_red("\tMAP_SHARED\n");
-        flags &= ~MAP_SHARED;
-    }
-    if (flags & MAP_PRIVATE)
-    {
-        flags &= ~MAP_PRIVATE;
-        write_red("\tMAP_PRIVATE\n");
-    }
-    if (flags & MAP_FIXED)
-    {
-        flags &= ~MAP_FIXED;
-        write_red("\tMAP_FIXED\n");
-    }
-    if (flags & MAP_ANONYMOUS)
-    {
-        flags &= ~MAP_ANONYMOUS;
-        write_red("\tMAP_ANONYMOUS\n");
-    }
-    if (flags & MAP_GROWSDOWN)
-    {
-        flags &= ~MAP_GROWSDOWN;
-        write_red("\tMAP_GROWSDOWN\n");
-    }
-    if (flags & MAP_DENYWRITE)
-    {
-        flags &= ~MAP_DENYWRITE;
-        write_red("\tMAP_DENYWRITE\n");
-    }
-    if (flags & MAP_EXECUTABLE)
-    {
-        flags &= ~MAP_EXECUTABLE;
-        write_red("\tMAP_EXECUTABLE\n");
-    }
-    if (flags & MAP_LOCKED)
-    {
-        flags &= ~MAP_LOCKED;
-        write_red("\tMAP_LOCKED\n");
-    }
-    if (flags & MAP_NORESERVE)
-    {
-        flags &= ~MAP_NORESERVE;
-        write_red("\tMAP_NORESERVE\n");
-    }
-    if (flags & MAP_POPULATE)
-    {
-        flags &= ~MAP_POPULATE;
-        write_red("\tMAP_POPULATE\n");
-    }
-    if (flags & MAP_NONBLOCK)
-    {
-        flags &= ~MAP_NONBLOCK;
-        write_red("\tMAP_NONBLOCK\n");
-    }
-    if (flags & MAP_STACK)
-    {
-        flags &= ~MAP_STACK;
-        write_red("\tMAP_STACK\n");
-    }
-    if (flags & MAP_HUGETLB)
-    {
-        flags &= ~MAP_HUGETLB;
-        write_red("\tMAP_HUGETLB\n");
-    }
-    if (flags & MAP_FIXED_NOREPLACE)
-    {
-        flags &= ~MAP_FIXED_NOREPLACE;
-        write_red("\tMAP_FIXED_NOREPLACE\n");
-    }
-    if (flags)
-    {
-        write_red("\tunknown flags: ");
-        print_num(flags);
-        write_red("\t\n");
-    }
-}
-*/
 
 uintptr_t align_addr(uintptr_t addr)
 {
@@ -403,23 +251,7 @@ long sys_socket(va_list ap)
 
 long sys_fcntl(va_list ap)
 {
-    int fd = va_arg(ap, int);
-    int cmd = va_arg(ap, int);
-    int arg = va_arg(ap, int);
-    labelnum_red("fcntl: cmd", cmd);
-    labelnum_red("fcntl: arg", arg);
-    return;
-
-    sel4cp_msginfo msg = sel4cp_msginfo_new(0, 4);
-    sel4cp_mr_set(0, 2);
-    sel4cp_mr_set(1, fd);
-    sel4cp_mr_set(2, cmd);
-    sel4cp_mr_set(3, arg);
-
-    sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
-    int new_sd = sel4cp_mr_get(0);
-    labelnum("fcntl", new_sd);
-    return (long)new_sd;
+    return 0;
 }
 
 long sys_bind(va_list ap)
@@ -457,13 +289,11 @@ long sys_socket_connect(va_list ap)
     int port = addr->sa_data[0] << 8 | addr->sa_data[1];
 
     sel4cp_msginfo msg = sel4cp_msginfo_new(0, 3);
-    // labelnum("socket_connect to port: ", port);
     sel4cp_mr_set(0, SEL4CP_SOCKET_CONNECT);
     sel4cp_mr_set(1, sockfd);
     sel4cp_mr_set(2, port);
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
-    // labelnum("socket_connect: ", val);
     return (long)val;
 }
 
@@ -478,11 +308,6 @@ long sys_getgid(va_list ap)
     (void)ap;
     return 501;
 }
-
-// void nfs_send_to_lwip(void *buf, size_t len)
-// {
-//     return;
-// }
 
 long sys_sendto(va_list ap)
 {
@@ -524,8 +349,7 @@ long sys_recvfrom(va_list ap)
 
 void debug_error(long num)
 {
-    labelnum("Error doing syscall", num);
-    labelnum("Coming from", my_pid);
+    printf("Error doing syscall: %d\nComing from pid: %d", num, my_pid);
 }
 
 int pthread_setcancelstate(int state, int *oldstate)
@@ -587,11 +411,6 @@ long sys_dup3(va_list ap)
     sel4cp_msginfo ret = sel4cp_ppcall(LWIP_CH, msg);
     int val = sel4cp_mr_get(0);
 
-    sel4cp_dbg_puts("dup3 called\n");
-    labelnum("dup3 oldfd: ", oldfd);
-    labelnum("dup3 newfd: ", newfd);
-    labelnum("dup3 flags: ", flags);
-    labelnum("dup3 ret: ", val);
     return (long)val;
 }
 

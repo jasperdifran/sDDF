@@ -54,22 +54,8 @@ nfs_socket_t nfs_sockets[10] = {0};
 
 extern nfs_state_t nfs_state;
 
-void write_cyan(const char *str)
-{
-    sel4cp_dbg_puts("\033[36m");
-    sel4cp_dbg_puts(str);
-    sel4cp_dbg_puts("\033[0m");
-}
-
 int lwip_fcntl(void)
 {
-    int fd = sel4cp_mr_get(1);
-    int cmd = sel4cp_mr_get(2);
-    int arg = sel4cp_mr_get(3);
-    sel4cp_dbg_puts("fcntl\n");
-    labelnum("fd", fd);
-    labelnum("cmd", cmd);
-    labelnum("arg", arg);
     return 0;
 }
 
@@ -77,7 +63,7 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
 {
     if (p == NULL)
     {
-        write_cyan("Closing connection...\n");
+        printf("Closing connection...\n");
         tcp_close(tpcb);
         return ERR_OK;
     }
@@ -94,7 +80,7 @@ static err_t nfs_socket_recv_callback(void *arg, struct tcp_pcb *tpcb, struct pb
         int error = dequeue_avail(&nfs_state.rx_ring, &data, &discard_len, &cookie);
         if (error)
         {
-            write_cyan("Failed to dequeue avail from rx_ring\n");
+            printf("Failed to dequeue avail from rx_ring\n");
             return ERR_OK;
         }
 
@@ -123,7 +109,6 @@ static err_t nfs_socket_sent_callback(void *arg, struct tcp_pcb *pcb, u16_t len)
 // Connected function
 err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 {
-    write_cyan("Connected to socket!\n");
     ((nfs_socket_t *)arg)->connected = 1;
     tcp_sent(tpcb, nfs_socket_sent_callback);
     tcp_recv(tpcb, nfs_socket_recv_callback);
@@ -133,8 +118,7 @@ err_t nfs_connected(void *arg, struct tcp_pcb *tpcb, err_t err)
 
 void err_func(void *arg, err_t err)
 {
-    labelnum("Error with NFS socket", ((nfs_socket_t *)arg)->fd);
-    labelnum("Error code", err);
+    printf("Error %d with NFS socket %d", err, ((nfs_socket_t *)arg)->fd);
 }
 
 /**
@@ -146,7 +130,6 @@ void err_func(void *arg, err_t err)
  */
 int nfs_socket_connect(int fd, int port)
 {
-    write_cyan("Connecting to socket...\n");    
     nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
     sock->port = port;
 
@@ -156,7 +139,7 @@ int nfs_socket_connect(int fd, int port)
     err_t error = tcp_connect(sock->sock_tpcb, &ipaddr, port, nfs_connected);
     if (error != ERR_OK)
     {
-        write_cyan("Error connecting\n");
+        printf("Error connecting\n");
         return 1;
     }
     return 0;
@@ -177,7 +160,7 @@ int nfs_socket_close(int fd)
         if (tcp_close(sock))
         {
             return -1;
-            write_cyan("Error closing socket\n");
+            printf("Error closing socket\n");
         }
     }
     sock->used = 0;
@@ -203,7 +186,7 @@ int nfs_socket_create(void)
     freeSocket->sock_tpcb = tcp_new_ip_type(IPADDR_TYPE_V4);
     if (freeSocket->sock_tpcb == NULL)
     {
-        write_cyan("Error creating socket\n");
+        printf("Error creating socket\n");
         return 1;
     }
 
@@ -215,7 +198,6 @@ int nfs_socket_create(void)
     int i = 512;
     while (tcp_bind(freeSocket->sock_tpcb, IP_ADDR_ANY, i) != ERR_OK)
         i++;
-    labelnum("Bound outgoing sock to port", i);
     return freeSocket->fd;
 }
 
@@ -223,7 +205,8 @@ int nfs_socket_dup3(int oldfd, int newfd)
 {
     nfs_socket_t *old_sock = &nfs_sockets[oldfd - NFS_SOCKET_FD_OFFSET];
 
-    if (newfd < NFS_SOCKET_FD_OFFSET || newfd >= NFS_SOCKET_FD_OFFSET + NFS_SOCKETS) {
+    if (newfd < NFS_SOCKET_FD_OFFSET || newfd >= NFS_SOCKET_FD_OFFSET + NFS_SOCKETS)
+    {
         return EBADF;
     }
     nfs_socket_t *new_sock = &nfs_sockets[newfd - NFS_SOCKET_FD_OFFSET];
@@ -239,70 +222,6 @@ int nfs_socket_dup3(int oldfd, int newfd)
         return newfd;
     }
     return -1;
-}
-
-void char_to_hex(char c, char *buf)
-{
-    char *hex = "0123456789ABCDEF";
-    buf[0] = hex[(c >> 4) & 0xF];
-    buf[1] = hex[c & 0xF];
-}
-
-void print_addr(void *ptr)
-{
-    uintptr_t addr = (uintptr_t)ptr;
-    char hex[16];
-    for (int i = 0; i < 16; i++)
-    {
-        char_to_hex(((char *)&addr)[i], &hex[i * 2]);
-    }
-    sel4cp_dbg_puts(hex);
-    sel4cp_dbg_puts("\n");
-}
-
-void print_buf(uintptr_t buf)
-{
-    print_buf_len(buf, 2048);
-}
-
-void print_buf_len(uintptr_t buf, int len)
-{
-    int zeroes = 0;
-    for (int i = 0; i < len; i++)
-    {
-        char c = ((char *)buf)[i];
-        char hex[2];
-        // if (c == 0)
-        // {
-        //     zeroes++;
-        //     if (zeroes > 10)
-        //     {
-        //         break;
-        //     }
-        // }
-        // else
-        // {
-        //     zeroes = 0;
-        // }
-        char_to_hex(c, hex);
-        sel4cp_dbg_putc(hex[0]);
-        sel4cp_dbg_putc(hex[1]);
-        sel4cp_dbg_putc(' ');
-    }
-}
-
-void print_bright_magenta_buf(uintptr_t buf, int len)
-{
-    sel4cp_dbg_puts("\033[1;35m");
-    print_buf_len(buf, len);
-    sel4cp_dbg_puts("\033[0m\n");
-}
-
-void print_bright_green_buf(uintptr_t buf, int len)
-{
-    sel4cp_dbg_puts("\033[1;32m");
-    print_buf_len(buf, len);
-    sel4cp_dbg_puts("\033[0m\n");
 }
 
 int nfs_socket_process_tx(void)

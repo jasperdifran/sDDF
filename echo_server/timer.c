@@ -157,7 +157,6 @@ seL4_MessageInfo_t protected(sel4cp_channel ch, seL4_MessageInfo_t msginfo)
 
 void init(void)
 {
-    write_bright_green("Timer init\n");
     gpt_init();
 }
 

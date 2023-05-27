@@ -97,15 +97,16 @@ bool nfs_socket_connected = false;
 
 void nfs_connect_cb(int err, struct nfs_context *nfs_ctx, void *data, void *private_data)
 {
-    sel4cp_dbg_puts("nfs_connect_cb\n");
     if (err != 0)
     {
         sel4cp_dbg_puts("nfs_connect_cb: failed to connect to nfs server\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
-        return;
     }
-    sel4cp_dbg_puts("nfs_connect_cb: connected to nfs server\n");
+    else
+    {
+        sel4cp_dbg_puts("nfs_connect_cb: connected to nfs server\n");
+    }
 }
 
 void init_post(void)
@@ -125,7 +126,7 @@ void init_post(void)
         sel4cp_dbg_puts("init: failed to connect to nfs server\n");
         return;
     }
-    sel4cp_dbg_puts("init: connecting to nfs server\n");
+    sel4cp_dbg_puts("init_post: connecting to nfs server\n");
 }
 
 /**
@@ -142,93 +143,10 @@ void split_int_to_buf(int num, char *buf)
     buf[3] = num & 0xFF;
 }
 
-void write_num(int num)
-{
-    char buf[10];
-    int i = 0;
-    while (num > 0)
-    {
-        buf[i++] = '0' + (num % 10);
-        num /= 10;
-    }
-    for (int j = i - 1; j >= 0; j--)
-    {
-        sel4cp_dbg_putc(buf[j]);
-    }
-}
-
-void char_to_hex(char c, char *buf)
-{
-    char *hex = "0123456789ABCDEF";
-    buf[0] = hex[(c >> 4) & 0xF];
-    buf[1] = hex[c & 0xF];
-}
-
-void print_buf(uintptr_t buf)
-{
-    print_buf_len(buf, 2048);
-}
-
-void print_buf_len(uintptr_t buf, int len)
-{
-    int zeroes = 0;
-    for (int i = 0; i < len; i++)
-    {
-        char c = ((char *)buf)[i];
-        char hex[2];
-        // if (c == 0)
-        // {
-        //     zeroes++;
-        //     if (zeroes > 10)
-        //     {
-        //         break;
-        //     }
-        // }
-        // else
-        // {
-        //     zeroes = 0;
-        // }
-        char_to_hex(c, hex);
-        sel4cp_dbg_putc(hex[0]);
-        sel4cp_dbg_putc(hex[1]);
-        sel4cp_dbg_putc(' ');
-    }
-}
-
-void print_bright_magenta_buf(uintptr_t buf, int len)
-{
-    sel4cp_dbg_puts("\033[1;35m");
-    print_buf_len(buf, len);
-    sel4cp_dbg_puts("\033[0m\n");
-}
-
-void print_bright_green_buf(uintptr_t buf, int len)
-{
-    sel4cp_dbg_puts("\033[1;32m");
-    print_buf_len(buf, len);
-    sel4cp_dbg_puts("\033[0m\n");
-}
-
-void writenum(int num)
-{
-    char buf[10];
-    int i = 0;
-    while (num > 0)
-    {
-        buf[i++] = '0' + (num % 10);
-        num /= 10;
-    }
-    for (int j = i - 1; j >= 0; j--)
-    {
-        sel4cp_dbg_putc(buf[j]);
-    }
-}
-
 static void __nfs_send_to_lwip(int fd, void *buffer, size_t len)
 {
     char *buf = (char *)buffer;
     unsigned int bytes_written = 0;
-    // print_bright_green_buf(buffer, len);
 
     while (bytes_written < len)
     {
@@ -290,17 +208,13 @@ static size_t __nfs_recv_from_lwip(int fd, void *buffer, size_t len)
         uintptr_t rx_buf;
         unsigned int temp_len;
 
-        // if (ring_empty(lwip_rx_ring.used_ring))
-        // {
-        //     break;
-        // }
-
         int error = dequeue_used(&lwip_rx_ring, &rx_buf, &temp_len, &rx_cookie);
         if (error)
         {
             sel4cp_notify(LWIP_NFS_CH);
             errcount++;
-            if (errcount > 10)
+            // Check that nothing is available from lwip 3 times before giving up
+            if (errcount > 3)
                 return bytes_read;
             else
                 continue;
@@ -397,7 +311,6 @@ int poll_lwip_socket(void)
 
     int ret = 0;
     int events = nfs_which_events(nfs);
-    // labelnum("events: ", events);
     if ((events & POLLOUT) && !ring_empty(lwip_tx_ring.avail_ring))
     {
         ret |= POLLOUT;
@@ -500,7 +413,6 @@ void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *p
     else
     {
         // Close file once done
-        sel4cp_dbg_puts("nfs_close_async_cb: closed file\n");
         nfs_openreadclose_data_t *data = ((nfs_openreadclose_data_t *)private_data);
         data->file_handle = 0;
         data->len_to_read = 0;
@@ -649,15 +561,12 @@ void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_l
     nfs_openreadclose_data[i]->request_id = request_id;
     nfs_openreadclose_data[i]->len_to_read = get_int_from_buf((char *)rx_buf, 1);
 
-    sel4cp_dbg_puts((char *)rx_buf + 5);
-    sel4cp_dbg_puts("\n");
-
     nfs_open_async(nfs, (char *)rx_buf + 5, O_RDONLY, nfs_open_async_cb, (void *)nfs_openreadclose_data[i]);
 }
 
 void handle_webserver_request(void)
 {
-    // TODO: handle multiple requests
+    // TODO: check for more bufs coming from webserver (do this all in a loop until websrv_tx_ring is empty)
     void *request_id;
     uintptr_t rx_buf;
     unsigned int buf_len;
