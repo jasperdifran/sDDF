@@ -358,7 +358,7 @@ static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data,
         }
 
         ((char *)rx_buf)[0] = SYS_STAT64;
-        ((char *)rx_buf)[1] = -2;
+        ((char *)rx_buf)[1] = 1;
         error = enqueue_used(&websrv_rx_ring, rx_buf, 2, (void *)continuation_id);
         if (error)
         {
