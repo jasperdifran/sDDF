@@ -349,7 +349,7 @@ long sys_recvfrom(va_list ap)
 
 void debug_error(long num)
 {
-    printf("Error doing syscall: %d\nComing from pid: %d", num, my_pid);
+    printf("Error doing syscall: %d from pid: %d", num, my_pid);
 }
 
 int pthread_setcancelstate(int state, int *oldstate)

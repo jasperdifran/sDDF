@@ -167,23 +167,7 @@ void copy_mpybuf_to_ringbuf(void *cookie)
     }
 }
 
-void split_int_to_buf(int num, char *buf)
-{
-    buf[0] = (num >> 24) & 0xFF;
-    buf[1] = (num >> 16) & 0xFF;
-    buf[2] = (num >> 8) & 0xFF;
-    buf[3] = num & 0xFF;
-}
 
-int get_int_from_buf(char *buf, int offset)
-{
-    int ret = 0;
-    ret |= (buf)[offset + 0] << 24;
-    ret |= (buf)[offset + 1] << 16;
-    ret |= (buf)[offset + 2] << 8;
-    ret |= (buf)[offset + 3] << 0;
-    return ret;
-}
 
 /**
  * @brief Request the content of a file from the NFS server. Send in the following shape
@@ -224,7 +208,7 @@ void req_file(const char *filename, int len_to_read)
 /**
  * @brief Request the stat of a file. Sends a buf to NFS server in the following shape:
  *
- * | 1 byte command: SYS_STAT64 | pathLen bytes path | 1 byte null terminator |
+ * | 1 byte command: SYS_STAT64 | pathLen bytes; path | '\0' |
  *
  * @param filename
  */
@@ -259,6 +243,16 @@ void stat_file(const char *filename)
     STAT: [command (1 byte), file size (4 bytes), last mod date (2 bytes), last mod time (2 bytes), is_dir (1 byte)]
 */
 
+/**
+ * @brief Handle a read response from NFS.
+ * 
+ * In the case of a file being read, i.e. NFS is about to send it to lwip, we want to just send the headers required for
+ * this reponse so rx_buf and len go unused, only continuation_id is used.
+ * 
+ * @param rx_buf 
+ * @param len 
+ * @param continuation_id 
+ */
 void handle_read_response(void *rx_buf, int len, int continuation_id)
 {
 
@@ -293,6 +287,19 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
     run_cont("readfilecont.py", 0, (void *)nfs_received_data_store, len_read, &requests_private_data[continuation_id], (char *)tx_data, &tx_len);
 }
 
+/**
+ * @brief Handle a stat response from NFS. The shape of the incoming packet in the case of success:
+ * 
+ * | 1 byte: SYS_STAT64 | 4 byte int: file size | 2 byte int: last mod date | 2 byte int: last mod time | 1 byte: is_dir |
+ * 
+ * In the case of failure:
+ * 
+ * | 1 byte: SYS_STAT64 | 1 byte: error code. At this stage it is only ever 1 |
+ * 
+ * @param rx_buf Buffer already dequeued from the rx_ring
+ * @param len 
+ * @param continuation_id 
+ */
 void handle_stat_response(void *rx_buf, int len, int continuation_id)
 {
     if (len != 2) {
@@ -303,6 +310,14 @@ void handle_stat_response(void *rx_buf, int len, int continuation_id)
     
 }
 
+/**
+ * @brief Handle an error response from NFS. The shape of the incoming packet:
+ * | 1 byte: SYS_ERROR | 4 byte int: error code |
+ * 
+ * @param rx_buf 
+ * @param len 
+ * @param continuation_id 
+ */
 void handle_error_response(void *rx_buf, int len, int continuation_id)
 {
     int error = get_int_from_buf((char *)rx_buf, 1);

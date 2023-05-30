@@ -350,6 +350,8 @@ static void nfs_stat64_async_cb(int status, struct nfs_context *nfs, void *data,
         uintptr_t rx_buf;
         unsigned int buf_len;
 
+        // TODO use error_response instead to send a 404
+
         int error = dequeue_avail(&websrv_rx_ring, &rx_buf, &buf_len, &cookie_continuation_id);
         if (error)
         {
@@ -414,22 +416,20 @@ void nfs_close_async_cb(int status, struct nfs_context *nfs, void *data, void *p
     {
         // Close file once done
         nfs_openreadclose_data_t *data = ((nfs_openreadclose_data_t *)private_data);
-        data->file_handle = 0;
-        data->len_to_read = 0;
-        data->request_id = 0;
-        data->used = 0;
+        memset(data, 0, sizeof(nfs_openreadclose_data_t));
     }
 }
 void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *private_data)
 {
-    if (status != ((nfs_openreadclose_data_t *)private_data)->len_to_read)
+    nfs_openreadclose_data_t *request_data = (nfs_openreadclose_data_t *)private_data;
+    if (status != request_data->len_to_read)
     {
         sel4cp_dbg_puts("nfs_read_async_cb: failed to read file\n");
         sel4cp_dbg_puts(nfs_get_error(nfs));
         sel4cp_dbg_puts("\n");
         sel4cp_dbg_puts(data);
         sel4cp_dbg_puts("\n");
-        send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
+        send_websrv_error(request_data->request_id, 500);
     }
     else
     {
@@ -447,7 +447,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         if (error)
         {
             sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
-            send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
+            send_websrv_error(request_data->request_id, 500);
             return;
         }
 
@@ -455,7 +455,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         ((char *)rx_buf)[0] = SYS_OPENREADCLOSE;
 
         // Set next 4 to length of entire data
-        split_int_to_buf(((nfs_openreadclose_data_t *)private_data)->len_to_read, (char *)rx_buf + 1);
+        split_int_to_buf(request_data->len_to_read, (char *)rx_buf + 1);
 
         // Send the first buffer with the command ID and how many bytes we read. Can fit at most BUF_SIZE - len_sent
         // bytes in this buffer
@@ -464,11 +464,11 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         len_sent += send_this_round;
         len_to_be_sent -= send_this_round;
 
-        error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round + 5, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
+        error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round + 5, (void *)request_data->request_id);
         if (error)
         {
             sel4cp_dbg_puts("Failed to enqueue used to websrv_rx_ring\n");
-            send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
+            send_websrv_error(request_data->request_id, 500);
             return;
         }
 
@@ -478,7 +478,7 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
             if (error)
             {
                 sel4cp_dbg_puts("Failed to dequeue avail from websrv_tx_ring\n");
-                send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
+                send_websrv_error(request_data->request_id, 500);
                 return;
             }
 
@@ -486,18 +486,18 @@ void nfs_read_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
 
             memcpy((char *)rx_buf, (char *)data + len_sent, send_this_round);
 
-            error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round, (void *)((nfs_openreadclose_data_t *)private_data)->request_id);
+            error = enqueue_used(&websrv_rx_ring, rx_buf, send_this_round, (void *)request_data->request_id);
             if (error)
             {
                 sel4cp_dbg_puts("Failed to enqueue used to websrv_tx_ring\n");
-                send_websrv_error(((nfs_openreadclose_data_t *)private_data)->request_id, 500);
+                send_websrv_error(request_data->request_id, 500);
                 return;
             }
             len_to_be_sent -= send_this_round;
             len_sent += send_this_round;
         }
         sel4cp_notify(WEBSRV_CH);
-        nfs_close_async(nfs, ((nfs_openreadclose_data_t *)private_data)->file_handle, nfs_close_async_cb, private_data);
+        nfs_close_async(nfs, request_data->file_handle, nfs_close_async_cb, private_data);
     }
 }
 
@@ -584,10 +584,6 @@ void handle_webserver_request(void)
     {
     case SYS_STAT64:
         nfs_stat64_async(nfs, (char *)rx_buf + 1, nfs_stat64_async_cb, request_id);
-        break;
-    case SYS_OPEN:
-        break;
-    case SYS_READ:
         break;
     case SYS_OPENREADCLOSE:
         handle_openreadclose(request_id, rx_buf, buf_len);

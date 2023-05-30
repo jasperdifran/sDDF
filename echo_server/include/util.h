@@ -65,3 +65,50 @@ puthex64(uint64_t val)
     }
     print(buffer);
 }
+
+void split_int_to_buf(int num, char *buf)
+{
+    buf[0] = (num >> 24) & 0xFF;
+    buf[1] = (num >> 16) & 0xFF;
+    buf[2] = (num >> 8) & 0xFF;
+    buf[3] = num & 0xFF;
+}
+
+void split_ptr_to_buf(void *ptr, char *buf)
+{
+    uintptr_t num = (uintptr_t)ptr;
+
+    for (int i = 0; i < sizeof(void *); i++)
+    {
+        buf[i] = (num >> (8 * (sizeof(void *) - i - 1))) & 0xFF;
+    }
+
+    // buf[0] = (num >> 56) & 0xFF;
+    // buf[1] = (num >> 48) & 0xFF;
+    // buf[2] = (num >> 40) & 0xFF;
+    // buf[3] = (num >> 32) & 0xFF;
+    // buf[4] = (num >> 24) & 0xFF;
+    // buf[5] = (num >> 16) & 0xFF;
+    // buf[6] = (num >> 8) & 0xFF;
+    // buf[7] = num & 0xFF;
+}
+
+void *get_ptr_from_buf(char *buf, int offset)
+{
+    uintptr_t ret = 0;
+
+    for (int i = 0; i < sizeof(void *); i++)
+    {
+        ret |= (buf)[offset + i] << (8 * (sizeof(void *) - i - 1));
+    }
+}
+
+int get_int_from_buf(char *buf, int offset)
+{
+    int ret = 0;
+    ret |= (buf)[offset + 0] << 24;
+    ret |= (buf)[offset + 1] << 16;
+    ret |= (buf)[offset + 2] << 8;
+    ret |= (buf)[offset + 3] << 0;
+    return ret;
+}
