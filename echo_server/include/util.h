@@ -27,7 +27,7 @@
 #define MAX(a, b) (a > b) ? a : b
 #define ABS(a) (a < 0) ? -a : a
 
-static void
+static inline void
 putC(uint8_t ch)
 {
     while (!(*UART_REG(STAT) & STAT_TDRE))
@@ -35,7 +35,7 @@ putC(uint8_t ch)
     *UART_REG(TRANSMIT) = ch;
 }
 
-static void
+static inline void
 print(const char *s)
 {
     while (*s)
@@ -45,13 +45,13 @@ print(const char *s)
     }
 }
 
-static char
+static inline char
 hexchar(unsigned int v)
 {
     return v < 10 ? '0' + v : ('a' - 10) + v;
 }
 
-static void
+static inline void
 puthex64(uint64_t val)
 {
     char buffer[16 + 3];
@@ -66,7 +66,7 @@ puthex64(uint64_t val)
     print(buffer);
 }
 
-void split_int_to_buf(int num, char *buf)
+static inline void split_int_to_buf(int num, char *buf)
 {
     buf[0] = (num >> 24) & 0xFF;
     buf[1] = (num >> 16) & 0xFF;
@@ -74,7 +74,7 @@ void split_int_to_buf(int num, char *buf)
     buf[3] = num & 0xFF;
 }
 
-void split_ptr_to_buf(void *ptr, char *buf)
+static inline void split_ptr_to_buf(void *ptr, char *buf)
 {
     uintptr_t num = (uintptr_t)ptr;
 
@@ -82,18 +82,9 @@ void split_ptr_to_buf(void *ptr, char *buf)
     {
         buf[i] = (num >> (8 * (sizeof(void *) - i - 1))) & 0xFF;
     }
-
-    // buf[0] = (num >> 56) & 0xFF;
-    // buf[1] = (num >> 48) & 0xFF;
-    // buf[2] = (num >> 40) & 0xFF;
-    // buf[3] = (num >> 32) & 0xFF;
-    // buf[4] = (num >> 24) & 0xFF;
-    // buf[5] = (num >> 16) & 0xFF;
-    // buf[6] = (num >> 8) & 0xFF;
-    // buf[7] = num & 0xFF;
 }
 
-void *get_ptr_from_buf(char *buf, int offset)
+static inline void *get_ptr_from_buf(char *buf, int offset)
 {
     uintptr_t ret = 0;
 
@@ -101,9 +92,10 @@ void *get_ptr_from_buf(char *buf, int offset)
     {
         ret |= (buf)[offset + i] << (8 * (sizeof(void *) - i - 1));
     }
+    return (void *)ret;
 }
 
-int get_int_from_buf(char *buf, int offset)
+static inline int get_int_from_buf(char *buf, int offset)
 {
     int ret = 0;
     ret |= (buf)[offset + 0] << 24;

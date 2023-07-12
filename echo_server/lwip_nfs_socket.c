@@ -151,8 +151,9 @@ int nfs_socket_connect(int fd, int port)
  * @param fd. File descriptor for the socket
  * @return int. Returns 0 on success, -1 on failure
  */
-int nfs_socket_close(int fd)
+int nfs_socket_close(int fd, int unused)
 {
+    (void)unused;
     nfs_socket_t *sock = &nfs_sockets[fd - NFS_SOCKET_FD_OFFSET];
 
     if (sock->used)

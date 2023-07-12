@@ -10,3 +10,5 @@ typedef struct websrv_state {
      * Metadata associated with buffers
      */
 } websrv_state_t;
+
+int websrv_setup_tcp_socket(void);

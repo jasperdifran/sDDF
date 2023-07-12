@@ -3,6 +3,7 @@
 #include <websrvint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <syscall_implementation.h>
 
@@ -12,10 +13,6 @@
 #include "echo.h"
 
 #include "util.h"
-
-#define MIN(a, b) (a < b) ? a : b
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define ABS(a) ((a) < 0 ? -(a) : (a))
 
 #define LWIP_CH 6
 #define NFS_CH 7
@@ -122,7 +119,7 @@ void init(void)
     init_websrv();
     ring_init(&nfs_rx_ring, (ring_buffer_t *)rx_nfs_websrv_avail, (ring_buffer_t *)rx_nfs_websrv_used, NULL, 0);
     ring_init(&nfs_tx_ring, (ring_buffer_t *)tx_nfs_websrv_avail, (ring_buffer_t *)tx_nfs_websrv_used, NULL, 0);
-    sel4cp_dbg_puts("Init websrv pd\n");
+    printf("Init websrv pd\n");
 
     for (int i = 0; i < MAX_REQUESTS; i++)
     {
@@ -152,7 +149,7 @@ void copy_mpybuf_to_ringbuf(void *cookie)
         int error = dequeue_avail(&lwip_tx_ring, &tx_buf, &temp_len, &tx_cookie);
         if (error)
         {
-            sel4cp_dbg_puts("Failed to dequeue avail from lwip_tx_ring\n");
+            printf("Failed to dequeue avail from lwip_tx_ring\n");
             return;
         }
 
@@ -184,7 +181,7 @@ void req_file(const char *filename, int len_to_read)
 
     int error = dequeue_avail(&nfs_tx_ring, &tx_buf, &buf_len, &discard_cookie);
     if (error) {
-        sel4cp_dbg_puts("Failed to dequeue avail from nfs_tx_ring\n");
+        printf("Failed to dequeue avail from nfs_tx_ring\n");
         return;
     }
 
@@ -196,9 +193,9 @@ void req_file(const char *filename, int len_to_read)
     memcpy(buf + 5, filename, pathLen);
     buf[pathLen + 5] = '\0';
 
-    error = enqueue_used(&nfs_tx_ring, tx_buf, MIN(pathLen + 6, BUF_SIZE), current_request_id);
+    error = enqueue_used(&nfs_tx_ring, tx_buf, MIN(pathLen + 6, BUF_SIZE), (void *)current_request_id);
     if (error) {
-        sel4cp_dbg_puts("Failed to enqueue used to nfs_tx_ring\n");
+        printf("Failed to enqueue used to nfs_tx_ring\n");
         return;
     }
 
@@ -220,7 +217,7 @@ void stat_file(const char *filename)
 
     int err = dequeue_avail(&nfs_tx_ring, &tx_buf, &buf_len, &discard_cookie);
     if (err) {
-        sel4cp_dbg_puts("Failed to dequeue from nfs_tx_ring\n");
+        printf("Failed to dequeue from nfs_tx_ring\n");
         return;
     }
     int pathLen = strlen(filename);
@@ -228,9 +225,9 @@ void stat_file(const char *filename)
     buf[0] = SYS_STAT64;
     memcpy(buf + 1, filename, pathLen);
     buf[pathLen + 1] = '\0';
-    err = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 2, current_request_id);
+    err = enqueue_used(&nfs_tx_ring, tx_buf, pathLen + 2, (void *)current_request_id);
     if (err) {
-        sel4cp_dbg_puts("Failed to enqueue used to nfs_tx_ring\n");
+        printf("Failed to enqueue used to nfs_tx_ring\n");
         return;
     }
 
@@ -274,7 +271,7 @@ void handle_read_response(void *rx_buf, int len, int continuation_id)
         int error = dequeue_used(&nfs_rx_ring, &temp_rx_buf, &buf_len, &discard_cookie);
         if (error)
         {
-            sel4cp_dbg_puts("Failed to dequeue avail from nfs_rx_ring\n");
+            printf("Failed to dequeue avail from nfs_rx_ring\n");
             return;
         }
         int read_this_round = MIN(len_to_read, buf_len);
@@ -335,11 +332,11 @@ void handle_nfs_response()
     unsigned int buf_len;
 
     if (dequeue_used(&nfs_rx_ring, &rx_buf, &buf_len, &local_current_request_id)) {
-        sel4cp_dbg_puts("Failed to dequeue used from nfs_rx_ring\n");
+        printf("Failed to dequeue used from nfs_rx_ring\n");
         return;
     }
     char local_temp_buf[BUF_SIZE] = {0};
-    memcpy(local_temp_buf, rx_buf, buf_len);
+    memcpy(local_temp_buf, (void *)rx_buf, buf_len);
     enqueue_avail(&nfs_rx_ring, rx_buf, BUF_SIZE, NULL);
 
     current_request_id = (int)local_current_request_id;
@@ -393,7 +390,7 @@ void handle_lwip_request()
     int error = dequeue_used(&lwip_rx_ring, &rx_buf, &rx_len, &rx_cookie);
     if (error)
     {
-        sel4cp_dbg_puts("websrv: Failed to dequeue used from lwip_rx_ring\n");
+        printf("websrv: Failed to dequeue used from lwip_rx_ring\n");
         return;
     }
 
@@ -414,6 +411,11 @@ void handle_lwip_request()
     req->socket_id = rx_cookie;
 
     int status = run_webserver((char *)rx_buf, &requests_private_data[contInd], (char *)tx_data, &tx_len);
+    if (status == -1)
+    {
+        printf("Error running webserver\n");
+        return;
+    }
 
     if (request_done)
     {
@@ -448,7 +450,7 @@ void notified(sel4cp_channel ch)
         break;
 
     default:
-        sel4cp_dbg_puts("Unknown notif\n");
+        printf("Unknown notif\n");
         break;
     }
 }

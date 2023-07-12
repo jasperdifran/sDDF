@@ -14,7 +14,7 @@ typedef struct nfs_state
 
 int nfs_socket_create();
 int nfs_socket_connect(int fd, int port);
-int nfs_socket_close(int fd);
+int nfs_socket_close(int fd, int unused);
 int nfs_socket_dup3(int oldfd, int newfd);
 void nfs_init_sockets(void);
 int nfs_socket_process_tx(void);

@@ -21,7 +21,7 @@ int imx_getc(void)
     return val;
 }
 
-void imx_putc(uint8_t ch)
+void imx_putc(char ch)
 {
     while (!(*UART_REG(UARTSTAT) & STAT_TDRE))
     {

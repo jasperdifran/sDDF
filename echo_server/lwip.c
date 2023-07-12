@@ -21,6 +21,7 @@
 #include "lwip/snmp.h"
 #include "lwip/sys.h"
 #include "lwip/dhcp.h"
+#include "lwip/timeouts.h"
 
 #include "shared_ringbuffer.h"
 #include "echo.h"
@@ -459,8 +460,6 @@ void init(void)
 
     sel4cp_notify(INIT);
 }
-
-void labelnum(char *s, uint64_t n);
 
 // Array of function pointers
 static int (*nfs_socket_funcs[])(int arg1, int arg2) = {

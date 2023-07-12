@@ -129,20 +129,6 @@ void init_post(void)
     sel4cp_dbg_puts("init_post: connecting to nfs server\n");
 }
 
-/**
- * @brief UTIL function to split an int into four chars
- *
- * @param num
- * @param buf
- */
-void split_int_to_buf(int num, char *buf)
-{
-    buf[0] = (num >> 24) & 0xFF;
-    buf[1] = (num >> 16) & 0xFF;
-    buf[2] = (num >> 8) & 0xFF;
-    buf[3] = num & 0xFF;
-}
-
 static void __nfs_send_to_lwip(int fd, void *buffer, size_t len)
 {
     char *buf = (char *)buffer;
@@ -516,16 +502,6 @@ void nfs_open_async_cb(int status, struct nfs_context *nfs, void *data, void *pr
         request_data->file_handle = (struct nfsfh *)data;
         nfs_read_async(nfs, (struct nfsfh *)data, request_data->len_to_read, nfs_read_async_cb, private_data);
     }
-}
-
-int get_int_from_buf(char *buf, int offset)
-{
-    int ret = 0;
-    ret |= (buf)[offset + 0] << 24;
-    ret |= (buf)[offset + 1] << 16;
-    ret |= (buf)[offset + 2] << 8;
-    ret |= (buf)[offset + 3] << 0;
-    return ret;
 }
 
 void handle_openreadclose(void *request_id, uintptr_t rx_buf, unsigned int buf_len)
